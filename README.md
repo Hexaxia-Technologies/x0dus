@@ -167,6 +167,29 @@ git pull
   finishes. By default the helper removes temporary mappings.
 - `-NetworkMountOptions <string>` – additional options passed to the underlying
   mount command (useful for supplying NFS mount options or SMB dialect flags).
+- `-ForceCreateDestination` – when present the script will create the destination
+  directory without prompting. By default the script asks interactively before
+  creating a missing destination to avoid accidental disk changes when run
+  manually.
+
+### Robocopy tuning and retries
+
+The backup script exposes a few options to tune Robocopy's behavior and add
+automated retries for transient failures:
+
+- `-RobocopyThreads <int>` – number of threads passed to Robocopy's `/MT` flag
+  (default 8). Valid values: 1-128. Use `1` if you want single-threaded copying.
+- `-RobocopyRetries <int>` – number of additional retry attempts after the
+  initial Robocopy run (default 2). Valid values: 0-10. Combined with the
+  initial attempt this yields up to `1 + RobocopyRetries` attempts.
+- `-RobocopyRetryDelaySeconds <int>` – base retry delay in seconds (default 5).
+  Exponential backoff is applied between retries.
+
+Example: reduce thread count and increase retries for a flaky network share
+
+```powershell
+.\backup.ps1 -DestinationPath "E:\UserBackup" -RobocopyThreads 1 -RobocopyRetries 4 -RobocopyRetryDelaySeconds 10
+```
 
 If some locations cannot be scanned because of permissions, the script warns
 you so you can re-run PowerShell as an administrator or ensure extra free space
@@ -195,6 +218,12 @@ $credential = Get-Credential
 
 ```powershell
 .\backup.ps1 -DestinationPath "E:\UserBackup" -DryRun
+
+### Example: non-interactive creation of the destination
+
+```powershell
+.\backup.ps1 -DestinationPath "E:\UserBackup" -ForceCreateDestination -DryRun
+```
 ```
 
 ## What gets backed up?

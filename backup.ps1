@@ -111,6 +111,20 @@ param(
     [switch]$NetworkPersistent,
 
     [string]$NetworkMountOptions
+    ,
+    [switch]$ForceCreateDestination
+    ,
+    [ValidateRange(1,128)]
+    [int]
+    $RobocopyThreads = 8,
+
+    [ValidateRange(0,10)]
+    [int]
+    $RobocopyRetries = 2,
+
+    [ValidateRange(1,600)]
+    [int]
+    $RobocopyRetryDelaySeconds = 5
 )
 
 $ErrorActionPreference = 'Stop'
@@ -239,10 +253,10 @@ function Connect-NetworkDestination {
             New-PSDrive @parameters | Out-Null
         }
         catch {
-            throw "Unable to map SMB share $normalized: $($_.Exception.Message)"
+            throw "Unable to map SMB share ${normalized}: $($_.Exception.Message)"
         }
 
-        Write-Host "Mapped $normalized to drive $upperLetter:" -ForegroundColor Cyan
+    Write-Host "Mapped ${normalized} to drive ${upperLetter}:" -ForegroundColor Cyan
         return [PSCustomObject]@{
             Protocol = 'SMB'
             DriveLetter = $upperLetter
@@ -285,7 +299,7 @@ function Connect-NetworkDestination {
             & $mountCommand.Source @arguments
         }
         catch {
-            throw "Unable to mount NFS share $Share: $($_.Exception.Message)"
+            throw "Unable to mount NFS share ${Share}: $($_.Exception.Message)"
         }
 
         Write-Host "Mounted NFS export $Share to $target" -ForegroundColor Cyan
@@ -302,7 +316,7 @@ function Connect-NetworkDestination {
 
 function Disconnect-NetworkDestination {
     param(
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $false)]
         $Context
     )
 
@@ -373,6 +387,111 @@ function Initialize-Destination {
     return $fullPath
 }
 
+function Confirm-DestinationInteractive {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$Force
+    )
+
+    try {
+        if (Test-Path -LiteralPath $Path) {
+            Write-Host "Destination path exists: $Path" -ForegroundColor Cyan
+            return $true
+        }
+
+        if ($Force.IsPresent -or $ForceCreateDestination.IsPresent) {
+            try {
+                Initialize-Destination -Path $Path | Out-Null
+                Write-Host "Created destination path: $Path" -ForegroundColor Green
+                return $true
+            }
+            catch {
+                Write-Warning "Failed to create destination path '${Path}': $($_.Exception.Message)"
+                return $false
+            }
+        }
+
+        # Prompt the user to create the destination
+    $response = Read-Host "Destination path '$Path' does not exist. Create it? (Y/N)"
+        if ($response -match '^[Yy]') {
+            try {
+                Initialize-Destination -Path $Path | Out-Null
+                Write-Host "Created destination path: $Path" -ForegroundColor Green
+                return $true
+            }
+            catch {
+                Write-Warning "Failed to create destination path '${Path}': $($_.Exception.Message)"
+                return $false
+            }
+        }
+
+        throw "Destination path was not created: $Path"
+    }
+    catch {
+        throw
+    }
+}
+
+function Get-ScriptLogFilePath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Destination
+    )
+
+    if ($NoLog.IsPresent) {
+        return $null
+    }
+
+    $logDirectory = Join-Path $Destination 'logs'
+    if (-not (Test-Path -LiteralPath $logDirectory)) {
+        try {
+            New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
+        }
+        catch {
+            Write-Warning "Unable to create log directory '$logDirectory': $($_.Exception.Message)"
+            return $null
+        }
+    }
+
+    $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    return Join-Path $logDirectory "script-$timestamp.log"
+}
+
+function Start-ScriptLogging {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    try {
+        Start-Transcript -Path $Path -Append -ErrorAction Stop | Out-Null
+        $global:ScriptLogPath = $Path
+        $global:ScriptTranscriptStarted = $true
+        Write-Host "Script logging started to $Path" -ForegroundColor Yellow
+    }
+    catch {
+        Write-Warning "Start-Transcript failed: $($_.Exception.Message). Continuing without transcript logging."
+        $global:ScriptLogPath = $null
+        $global:ScriptTranscriptStarted = $false
+    }
+}
+
+function Stop-ScriptLogging {
+    try {
+        if ($global:ScriptTranscriptStarted) {
+            Stop-Transcript | Out-Null
+            Write-Host "Script logging stopped. Log: $($global:ScriptLogPath)" -ForegroundColor Yellow
+            $global:ScriptTranscriptStarted = $false
+        }
+    }
+    catch {
+        Write-Warning "Failed to stop transcript: $($_.Exception.Message)"
+    }
+}
+
 function Get-UserProfileBackupPath {
     $userProfile = [Environment]::GetFolderPath('UserProfile')
     $name = Split-Path -Path $userProfile -Leaf
@@ -428,8 +547,8 @@ function Get-AllUserProfileBackupPaths {
     try {
         $directories = Get-ChildItem -Path $usersRoot -Directory -ErrorAction Stop
     }
-    catch {
-        Write-Warning "Unable to enumerate user profiles in $usersRoot: $($_.Exception.Message)"
+        catch {
+        Write-Warning "Unable to enumerate user profiles in ${usersRoot}: $($_.Exception.Message)"
         return @()
     }
 
@@ -495,14 +614,14 @@ function Resolve-BackupItems {
 
     $items = @()
     if ($IncludeCurrentUser) {
-        $items += Get-UserProfileBackupPath()
+        $items += Get-UserProfileBackupPath
     }
 
     if ($IncludeAllUsers) {
         $items += Get-AllUserProfileBackupPaths -IncludePublic:$IncludePublicProfile
     }
     elseif ($IncludePublicProfile) {
-        $items += Get-PublicProfileBackupPath()
+        $items += Get-PublicProfileBackupPath
     }
 
     foreach ($path in $ExtraPaths) {
@@ -568,9 +687,9 @@ function Get-PathSizeInfo {
     }
 
     $messages = @()
-    foreach ($error in $errors) {
-        if ($error -and $error.Exception -and -not [string]::IsNullOrWhiteSpace($error.Exception.Message)) {
-            $messages += $error.Exception.Message
+    foreach ($err in $errors) {
+        if ($err -and $err.Exception -and -not [string]::IsNullOrWhiteSpace($err.Exception.Message)) {
+            $messages += $err.Exception.Message
         }
     }
 
@@ -700,7 +819,7 @@ function Export-InstalledSoftwareInventory {
                 @{ Name = 'InstallLocation'; Expression = { $_.InstallLocation } }
         }
         catch {
-            Write-Verbose "Unable to read installed software from $registryPath: $($_.Exception.Message)"
+            Write-Verbose "Unable to read installed software from ${registryPath}: $($_.Exception.Message)"
         }
     }
 
@@ -755,7 +874,18 @@ function Invoke-RobocopyBackup {
 
         [string]$LogFile,
 
-        [switch]$IsDryRun
+        [switch]$IsDryRun,
+        [ValidateRange(1,128)]
+        [int]
+        $Threads = 8,
+
+        [ValidateRange(0,10)]
+        [int]
+        $Retries = 2,
+
+        [ValidateRange(1,600)]
+        [int]
+        $RetryDelaySeconds = 5
     )
 
     if (-not (Test-Path -LiteralPath $Item.Target)) {
@@ -763,14 +893,14 @@ function Invoke-RobocopyBackup {
     }
 
     $arguments = @(
-        '"' + $Item.Source + '"',
-        '"' + $Item.Target + '"',
+        $Item.Source,
+        $Item.Target,
         '/E',
         '/COPY:DAT',
         '/DCOPY:DAT',
         '/R:2',
         '/W:5',
-        '/MT:8',
+        ("/MT:{0}" -f $Threads),
         '/XJ',
         '/V',
         '/TEE'
@@ -788,15 +918,54 @@ function Invoke-RobocopyBackup {
     $command = "robocopy $($arguments -join ' ')"
     Write-Verbose "Executing: $command"
 
-    & robocopy @arguments
-    $exitCode = $LASTEXITCODE
+    $attempt = 0
+    do {
+        $attempt++
+        Write-Verbose "Robocopy attempt $attempt of $($Retries + 1)"
+        & robocopy @arguments
+        $exitCode = $LASTEXITCODE
 
-    if ($exitCode -le 3) {
-        Write-Host "Completed with exit code $exitCode" -ForegroundColor Green
+        if ($exitCode -le 3) {
+            Write-Host "Completed with exit code $exitCode" -ForegroundColor Green
+            return
+        }
+
+        Write-Warning "Robocopy attempt $attempt failed with exit code $exitCode."
+
+        if ($attempt -le $Retries) {
+            $delay = [int]([Math]::Pow(2, $attempt - 1) * $RetryDelaySeconds)
+            Write-Host "Waiting $delay seconds before retrying..." -ForegroundColor Yellow
+            Start-Sleep -Seconds $delay
+        }
     }
-    else {
-        throw "Robocopy failed for $($Item.Source) with exit code $exitCode."
+    while ($attempt -le $Retries)
+
+    # If we reach here all attempts failed
+    Write-Host "Robocopy failed for $($Item.Source) after $attempt attempt(s) with exit code $exitCode." -ForegroundColor Red
+
+    if ($LogFile) {
+        Write-Host "Robocopy log: $LogFile" -ForegroundColor Yellow
+        try {
+            Write-Host "Last 200 lines of Robocopy log (searching for ERROR/failed lines):" -ForegroundColor Yellow
+            $lines = Get-Content -Path $LogFile -ErrorAction SilentlyContinue -Tail 200
+            $failureLines = $lines | Where-Object { $_ -match '\b(ERROR|failed|Failed|ERRORS)\b' }
+            if ($failureLines -and $failureLines.Count -gt 0) {
+                $failureLines | ForEach-Object { Write-Host $_ }
+            }
+            else {
+                $lines | ForEach-Object { Write-Host $_ }
+            }
+        }
+        catch {
+            Write-Warning "Unable to read Robocopy log at ${LogFile}: $($_.Exception.Message)"
+        }
     }
+
+    Write-Host "Common causes: insufficient permissions, files in use, network/share errors, or serious I/O errors." -ForegroundColor Yellow
+    Write-Host "Try: re-running PowerShell as Administrator, disabling interfering antivirus, or running Robocopy manually using the shown log path to inspect details." -ForegroundColor Yellow
+    Write-Host "Consider reducing threads (use -RobocopyThreads 1) or increasing retries." -ForegroundColor Yellow
+
+    throw "Robocopy failed for $($Item.Source) with exit code $exitCode after $attempt attempt(s). See log: $LogFile"
 }
 
 $osInfo = Get-OsVersionInfo
@@ -811,7 +980,20 @@ try {
     }
 
     $resolvedDestination = Resolve-DestinationPath -Path $DestinationPath -NetworkContext $networkContext
+
+    # Ensure destination exists or prompt to create it
+    if (-not (Confirm-DestinationInteractive -Path $resolvedDestination -Force:$ForceCreateDestination)) {
+        throw "Destination path unavailable: $resolvedDestination"
+    }
+
     $destination = Initialize-Destination -Path $resolvedDestination
+
+    # Start script-level logging (transcript) into the destination logs folder
+    $scriptLog = Get-ScriptLogFilePath -Destination $destination
+    if ($scriptLog) {
+        Start-ScriptLogging -Path $scriptLog
+    }
+
     $logFile = Get-LogFilePath -Destination $destination -RequestedLogPath $LogPath
     if ($logFile) {
         Write-Host "Logging Robocopy output to $logFile" -ForegroundColor Yellow
@@ -870,4 +1052,5 @@ try {
 }
 finally {
     Disconnect-NetworkDestination -Context $networkContext
+    Stop-ScriptLogging
 }
