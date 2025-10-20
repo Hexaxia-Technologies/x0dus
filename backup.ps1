@@ -1343,6 +1343,183 @@ function Export-InstalledSoftwareInventory {
     }
 }
 
+function Export-HardwareInventory {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$DestinationDirectory
+    )
+
+    $inventoryPath = Join-Path $DestinationDirectory 'hardware-inventory.csv'
+    $hardwareData = @()
+
+    Write-Host "Collecting hardware inventory..." -ForegroundColor Yellow
+
+    try {
+        # Computer System Info
+        $computerSystem = Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction SilentlyContinue
+        if ($computerSystem) {
+            $hardwareData += [PSCustomObject]@{
+                Category = 'System'
+                Name = $computerSystem.Model
+                Manufacturer = $computerSystem.Manufacturer
+                Model = $computerSystem.Model
+                DeviceID = 'N/A'
+                DriverVersion = 'N/A'
+                Status = 'N/A'
+                AdditionalInfo = "TotalRAM: $([math]::Round($computerSystem.TotalPhysicalMemory / 1GB, 2)) GB"
+            }
+        }
+
+        # CPU
+        $processors = Get-CimInstance -ClassName Win32_Processor -ErrorAction SilentlyContinue
+        foreach ($cpu in $processors) {
+            $hardwareData += [PSCustomObject]@{
+                Category = 'CPU'
+                Name = $cpu.Name
+                Manufacturer = $cpu.Manufacturer
+                Model = $cpu.Name
+                DeviceID = $cpu.DeviceID
+                DriverVersion = 'N/A'
+                Status = $cpu.Status
+                AdditionalInfo = "Cores: $($cpu.NumberOfCores), Threads: $($cpu.NumberOfLogicalProcessors)"
+            }
+        }
+
+        # GPU/Video Controllers
+        $videoControllers = Get-CimInstance -ClassName Win32_VideoController -ErrorAction SilentlyContinue
+        foreach ($gpu in $videoControllers) {
+            $hardwareData += [PSCustomObject]@{
+                Category = 'GPU'
+                Name = $gpu.Name
+                Manufacturer = $gpu.AdapterCompatibility
+                Model = $gpu.Name
+                DeviceID = $gpu.DeviceID
+                DriverVersion = $gpu.DriverVersion
+                Status = $gpu.Status
+                AdditionalInfo = "RAM: $([math]::Round($gpu.AdapterRAM / 1GB, 2)) GB"
+            }
+        }
+
+        # Network Adapters (physical only)
+        $networkAdapters = Get-CimInstance -ClassName Win32_NetworkAdapter -ErrorAction SilentlyContinue |
+            Where-Object { $_.PhysicalAdapter -eq $true }
+        foreach ($adapter in $networkAdapters) {
+            $hardwareData += [PSCustomObject]@{
+                Category = 'Network'
+                Name = $adapter.Name
+                Manufacturer = $adapter.Manufacturer
+                Model = $adapter.ProductName
+                DeviceID = $adapter.DeviceID
+                DriverVersion = 'N/A'
+                Status = $adapter.Status
+                AdditionalInfo = "MAC: $($adapter.MACAddress)"
+            }
+        }
+
+        # Audio Devices
+        $soundDevices = Get-CimInstance -ClassName Win32_SoundDevice -ErrorAction SilentlyContinue
+        foreach ($audio in $soundDevices) {
+            $hardwareData += [PSCustomObject]@{
+                Category = 'Audio'
+                Name = $audio.Name
+                Manufacturer = $audio.Manufacturer
+                Model = $audio.ProductName
+                DeviceID = $audio.DeviceID
+                DriverVersion = 'N/A'
+                Status = $audio.Status
+                AdditionalInfo = 'N/A'
+            }
+        }
+
+        # Motherboard
+        $baseBoard = Get-CimInstance -ClassName Win32_BaseBoard -ErrorAction SilentlyContinue
+        if ($baseBoard) {
+            $hardwareData += [PSCustomObject]@{
+                Category = 'Motherboard'
+                Name = $baseBoard.Product
+                Manufacturer = $baseBoard.Manufacturer
+                Model = $baseBoard.Product
+                DeviceID = 'N/A'
+                DriverVersion = 'N/A'
+                Status = $baseBoard.Status
+                AdditionalInfo = "SerialNumber: $($baseBoard.SerialNumber)"
+            }
+        }
+
+        # BIOS
+        $bios = Get-CimInstance -ClassName Win32_BIOS -ErrorAction SilentlyContinue
+        if ($bios) {
+            $hardwareData += [PSCustomObject]@{
+                Category = 'BIOS'
+                Name = $bios.Name
+                Manufacturer = $bios.Manufacturer
+                Model = $bios.Version
+                DeviceID = 'N/A'
+                DriverVersion = $bios.SMBIOSBIOSVersion
+                Status = $bios.Status
+                AdditionalInfo = "Release: $($bios.ReleaseDate)"
+            }
+        }
+
+        # Physical Memory
+        $memory = Get-CimInstance -ClassName Win32_PhysicalMemory -ErrorAction SilentlyContinue
+        foreach ($ram in $memory) {
+            $hardwareData += [PSCustomObject]@{
+                Category = 'RAM'
+                Name = "Memory Module"
+                Manufacturer = $ram.Manufacturer
+                Model = $ram.PartNumber
+                DeviceID = $ram.DeviceLocator
+                DriverVersion = 'N/A'
+                Status = 'N/A'
+                AdditionalInfo = "Capacity: $([math]::Round($ram.Capacity / 1GB, 2)) GB, Speed: $($ram.Speed) MHz"
+            }
+        }
+
+        # Disk Drives
+        $diskDrives = Get-CimInstance -ClassName Win32_DiskDrive -ErrorAction SilentlyContinue
+        foreach ($disk in $diskDrives) {
+            $hardwareData += [PSCustomObject]@{
+                Category = 'Storage'
+                Name = $disk.Model
+                Manufacturer = $disk.Manufacturer
+                Model = $disk.Model
+                DeviceID = $disk.DeviceID
+                DriverVersion = 'N/A'
+                Status = $disk.Status
+                AdditionalInfo = "Size: $([math]::Round($disk.Size / 1GB, 2)) GB, Interface: $($disk.InterfaceType)"
+            }
+        }
+
+        # USB Controllers
+        $usbControllers = Get-CimInstance -ClassName Win32_USBController -ErrorAction SilentlyContinue
+        foreach ($usb in $usbControllers) {
+            $hardwareData += [PSCustomObject]@{
+                Category = 'USB'
+                Name = $usb.Name
+                Manufacturer = $usb.Manufacturer
+                Model = $usb.Name
+                DeviceID = $usb.DeviceID
+                DriverVersion = 'N/A'
+                Status = $usb.Status
+                AdditionalInfo = 'N/A'
+            }
+        }
+
+        if ($hardwareData.Count -eq 0) {
+            Write-Warning 'No hardware information could be collected.'
+            return
+        }
+
+        # Export to CSV
+        $hardwareData | Export-Csv -Path $inventoryPath -NoTypeInformation -Encoding UTF8
+        Write-Host "Hardware inventory saved to $inventoryPath" -ForegroundColor Cyan
+    }
+    catch {
+        Write-Warning "Failed to collect hardware inventory: $($_.Exception.Message)"
+    }
+}
+
 function Get-LogFilePath {
     param(
         [Parameter(Mandatory = $true)]
@@ -1802,6 +1979,11 @@ try {
     }
     Write-Host ""
 
+    # Final confirmation before starting backup
+    Write-Host "Review the information above carefully." -ForegroundColor Yellow
+    Read-Host "Press Enter to start the backup (or Ctrl+C to cancel)"
+    Write-Host ""
+
     Write-Host "Starting backup of $($backupItems.Count) item(s)..." -ForegroundColor Magenta
     $itemIndex = 0
     foreach ($item in $backupItems) {
@@ -1815,6 +1997,7 @@ try {
     }
     else {
         Export-InstalledSoftwareInventory -DestinationDirectory $destination
+        Export-HardwareInventory -DestinationDirectory $destination
     }
 }
 finally {

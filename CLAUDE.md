@@ -200,7 +200,11 @@ Before starting the backup, the script performs comprehensive validation:
 **Ready to Begin:**
 - Visual header: "READY TO BEGIN BACKUP"
 - Summary of backup items, total size, mode (dry run if applicable)
-- Backup only starts after all checks pass and user confirmation (if needed)
+- **Universal confirmation prompt:** "Press Enter to start the backup (or Ctrl+C to cancel)"
+  - Gives user final opportunity to review size estimates
+  - Required for ALL backups, regardless of space utilization
+  - Allows user to cancel (Ctrl+C) or screenshot the summary
+- Backup only starts after user presses Enter
 
 ### Robocopy Retry Logic
 
@@ -247,6 +251,7 @@ Supported families: Debian/Ubuntu, Fedora/RHEL, Arch, openSUSE, Gentoo, Alpine, 
 **Backup execution**:
 - `Invoke-RobocopyBackup` - Wraps Robocopy with proper flags
 - `Export-InstalledSoftwareInventory` - Queries registry for installed software → `installed-software.csv`
+- `Export-HardwareInventory` - Collects hardware information via WMI/CIM → `hardware-inventory.csv`
 
 **Key Robocopy flags**: `/E /COPY:DAT /DCOPY:DAT /MT:8 /XJ /V /TEE`
 - `/E` - Copy subdirectories including empty
@@ -283,6 +288,35 @@ The data restore script has special logic to keep the new Linux desktop clean:
 3. Creates timestamped snapshot: `installed-software-names-<timestamp>.txt`
 4. Symlinks to `installed-software-names-latest.txt` for quick access
 5. Calls `print_package_manager_guidance()` which provides distro-specific package manager commands
+
+### Hardware Inventory Export
+
+`backup.ps1` exports comprehensive hardware information to `hardware-inventory.csv`:
+
+**Hardware categories captured:**
+- **System** - Manufacturer, model, total RAM
+- **CPU** - Processor model, cores, threads
+- **GPU** - Graphics card model, manufacturer, driver version, VRAM (critical for NVIDIA/AMD proprietary drivers)
+- **Network** - Ethernet and WiFi adapters with MAC addresses (essential for driver compatibility)
+- **Audio** - Sound devices (for ALSA/PulseAudio configuration)
+- **Motherboard** - Manufacturer, model, serial number
+- **BIOS** - Version and release date
+- **RAM** - Memory modules with capacity, speed, and slot location
+- **Storage** - Disk drives with size and interface type
+- **USB** - USB controller information
+
+**Use cases for Linux migration:**
+- **WiFi drivers** - Identify WiFi chipset to find Linux driver packages
+- **GPU drivers** - Determine if NVIDIA/AMD proprietary drivers are needed
+- **Network adapters** - Ensure Ethernet drivers are available
+- **Hardware compatibility** - Pre-migration compatibility checking with Linux hardware databases
+- **Troubleshooting** - Complete hardware manifest for post-migration driver issues
+
+**Export timing:**
+- Runs after successful backup completion
+- Skipped during dry run mode (same as software inventory)
+- Uses Get-CimInstance (modern) for hardware queries
+- Graceful error handling if WMI/CIM queries fail
 
 ## Key Implementation Patterns
 
