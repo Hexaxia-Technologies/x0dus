@@ -141,11 +141,11 @@ param(
 # Display banner
 $banner = @"
 
-╔═══════════════════════════════════════════════════════════════════════════════╗
-║                              x0dus Migration Toolkit                          ║
-║         Windows to Linux Migration - Data Backup and Restore Utility         ║
-║                      https://github.com/Hexaxia-Technologies                  ║
-╚═══════════════════════════════════════════════════════════════════════════════╝
+===============================================================================
+                         x0dus Migration Toolkit
+      Windows to Linux Migration - Data Backup and Restore Utility
+                  https://github.com/Hexaxia-Technologies
+===============================================================================
 
 "@
 
@@ -528,9 +528,9 @@ function Show-Menu {
     )
 
     Write-Host ""
-    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "---------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host " $Title" -ForegroundColor Yellow
-    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "---------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host ""
 
     for ($i = 0; $i -lt $Options.Count; $i++) {
@@ -559,9 +559,9 @@ function Get-DestinationPathInteractive {
     )
 
     Write-Host ""
-    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "---------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host " Destination Selection" -ForegroundColor Yellow
-    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "---------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host ""
 
     if ($AllowNetworkShare) {
@@ -598,9 +598,9 @@ function Get-DestinationPathInteractive {
 
 function Get-NetworkShareInteractive {
     Write-Host ""
-    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "---------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host " Network Share Configuration" -ForegroundColor Yellow
-    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "---------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host ""
 
     Write-Host "Enter network share path:" -ForegroundColor White
@@ -642,9 +642,9 @@ function Get-NetworkShareInteractive {
 
 function Get-UserProfileSelectionInteractive {
     Write-Host ""
-    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "---------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host " User Profile Selection" -ForegroundColor Yellow
-    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "---------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host ""
 
     $currentUser = [Environment]::UserName
@@ -669,9 +669,9 @@ function Get-UserProfileSelectionInteractive {
 
 function Get-AdditionalPathsInteractive {
     Write-Host ""
-    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "---------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host " Additional Folders" -ForegroundColor Yellow
-    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "---------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host ""
 
     Write-Host "Enter additional folders to backup (one per line)." -ForegroundColor White
@@ -695,9 +695,9 @@ function Get-AdditionalPathsInteractive {
 
 function Get-RobocopyOptionsInteractive {
     Write-Host ""
-    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "---------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host " Robocopy Tuning Options" -ForegroundColor Yellow
-    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "---------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host ""
 
     Write-Host "Configure advanced Robocopy options? (Y/N) [default: N]" -ForegroundColor White
@@ -743,9 +743,9 @@ function Get-InteractiveConfiguration {
     )
 
     Write-Host ""
-    Write-Host "╔═══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║                         Interactive Backup Configuration                      ║" -ForegroundColor Cyan
-    Write-Host "╚═══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host "+-------------------------------------------------------------------------------+" -ForegroundColor Cyan
+    Write-Host "|                         Interactive Backup Configuration                      |" -ForegroundColor Cyan
+    Write-Host "+-------------------------------------------------------------------------------+" -ForegroundColor Cyan
 
     $config = @{}
 
@@ -788,9 +788,9 @@ function Get-InteractiveConfiguration {
 
     # Confirmation
     Write-Host ""
-    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "---------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host " Configuration Summary" -ForegroundColor Yellow
-    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host "---------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host ""
 
     if ($config.NetworkShare) {
@@ -1223,13 +1223,13 @@ function Show-RobocopyProgress {
     $spaces = " " * (20 - $progressBar.Length)
 
     Write-Host ""
-    Write-Host "╔═══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║  Item $CurrentItem of $TotalItems - Overall Progress: $percentOverall%".PadRight(79) + "║" -ForegroundColor Cyan
-    Write-Host "║  [$progressBar$spaces]".PadRight(79) + "║" -ForegroundColor Yellow
-    Write-Host "╠═══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
-    Write-Host "║  Source: $SourcePath".PadRight(79).Substring(0,79) + "║" -ForegroundColor White
-    Write-Host "║  Destination: $DestinationPath".PadRight(79).Substring(0,79) + "║" -ForegroundColor White
-    Write-Host "╚═══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host "+-------------------------------------------------------------------------------+" -ForegroundColor Cyan
+    Write-Host "|  Item $CurrentItem of $TotalItems - Overall Progress: $percentOverall%".PadRight(79) + "|" -ForegroundColor Cyan
+    Write-Host "|  [$progressBar$spaces]".PadRight(79) + "|" -ForegroundColor Yellow
+    Write-Host "+-------------------------------------------------------------------------------+" -ForegroundColor Cyan
+    Write-Host "|  Source: $SourcePath".PadRight(79).Substring(0,79) + "|" -ForegroundColor White
+    Write-Host "|  Destination: $DestinationPath".PadRight(79).Substring(0,79) + "|" -ForegroundColor White
+    Write-Host "+-------------------------------------------------------------------------------+" -ForegroundColor Cyan
     Write-Host ""
 }
 
@@ -1351,9 +1351,9 @@ $isInteractive = (-not $NonInteractive.IsPresent) -and ([string]::IsNullOrWhiteS
 
 if ($isInteractive) {
     Write-Host ""
-    Write-Host "╔═══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║                              Interactive Backup Mode                          ║" -ForegroundColor Cyan
-    Write-Host "╚═══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host "+-------------------------------------------------------------------------------+" -ForegroundColor Cyan
+    Write-Host "|                              Interactive Backup Mode                          |" -ForegroundColor Cyan
+    Write-Host "+-------------------------------------------------------------------------------+" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "Welcome to the x0dus interactive backup wizard!" -ForegroundColor Yellow
     Write-Host "This wizard will guide you through configuring your backup." -ForegroundColor White
