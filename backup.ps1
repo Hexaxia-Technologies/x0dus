@@ -1606,10 +1606,14 @@ if ($isInteractive) {
 
     # Apply interactive configuration to script variables
     $DestinationPath = $interactiveConfig.DestinationPath
-    $NetworkShare = $interactiveConfig.NetworkShare
-    $NetworkProtocol = $interactiveConfig.NetworkProtocol
-    $NetworkCredential = $interactiveConfig.NetworkCredential
-    $NetworkDriveLetter = $interactiveConfig.NetworkDriveLetter
+
+    # Only set network parameters if a network share was configured
+    if ($interactiveConfig.NetworkShare) {
+        $NetworkShare = $interactiveConfig.NetworkShare
+        $NetworkProtocol = $interactiveConfig.NetworkProtocol
+        $NetworkCredential = $interactiveConfig.NetworkCredential
+        $NetworkDriveLetter = $interactiveConfig.NetworkDriveLetter
+    }
 
     if ($interactiveConfig.IncludeAllUsers) {
         $IncludeAllUsers = $true
