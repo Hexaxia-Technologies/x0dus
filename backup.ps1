@@ -68,6 +68,36 @@
     the -o parameter of mount.cifs. For NFS it maps to the -o parameter of
     mount.
 
+.PARAMETER ForceCreateDestination
+    Automatically create the destination directory without prompting. Useful for
+    automation and scripting.
+
+.PARAMETER RobocopyThreads
+    Number of threads for multi-threaded copying (1-128). Defaults to 8. Controls
+    the Robocopy /MT flag.
+
+.PARAMETER RobocopyRetries
+    Number of retry attempts after initial Robocopy failure (0-10). Defaults to 2.
+    Uses exponential backoff between retries.
+
+.PARAMETER RobocopyRetryDelaySeconds
+    Base delay in seconds for exponential backoff between retries (1-600). Defaults
+    to 5 seconds.
+
+.PARAMETER NonInteractive
+    Disable interactive mode when DestinationPath is not provided. Script will fail
+    if required parameters are missing instead of prompting.
+
+.PARAMETER AppDataMode
+    Controls how AppData folders are handled during backup. Valid values:
+    - Full (default): Include all AppData (Roaming, Local, LocalLow)
+    - RoamingOnly: Include only AppData\Roaming (settings/saves), exclude Local and LocalLow (caches)
+    - None: Exclude all AppData folders from the backup
+    - EssentialFoldersOnly: Skip entire user profile, backup only essential folders (Documents, Desktop, Pictures, Videos, Music, Downloads, Favorites)
+
+    Note: AppData\Roaming typically contains 1-10 GB of app settings and game saves.
+    AppData\Local can contain 5-50+ GB of caches, temp files, and shader caches.
+
 .EXAMPLE
     .\backup.ps1
 
@@ -83,6 +113,25 @@
     .\backup.ps1 -DestinationPath "E:\UserBackup" -AdditionalPaths "C:\"
 
     Backs up the default folders and the root of the C: drive with a friendly name.
+
+.EXAMPLE
+    .\backup.ps1 -DestinationPath "E:\UserBackup" -AppDataMode RoamingOnly
+
+    Backs up the user profile but excludes AppData\Local and AppData\LocalLow, keeping
+    only AppData\Roaming (settings and game saves). This significantly reduces backup size
+    by skipping browser caches, temp files, and shader caches.
+
+.EXAMPLE
+    .\backup.ps1 -DestinationPath "E:\UserBackup" -AppDataMode EssentialFoldersOnly
+
+    Backs up only essential user folders (Documents, Desktop, Pictures, Videos, Music,
+    Downloads, Favorites) and skips all AppData. Best for minimal backups when starting
+    fresh on Linux.
+
+.EXAMPLE
+    .\backup.ps1 -DestinationPath "E:\UserBackup" -AppDataMode Full -DryRun
+
+    Previews a full backup including all AppData folders without actually copying files.
 
 .NOTES
     Run this script from an elevated PowerShell session if you see access denied errors.
@@ -135,7 +184,10 @@ param(
     [int]
     $RobocopyRetryDelaySeconds = 5,
 
-    [switch]$NonInteractive
+    [switch]$NonInteractive,
+
+    [ValidateSet('None', 'RoamingOnly', 'Full', 'EssentialFoldersOnly')]
+    [string]$AppDataMode = 'Full'
 )
 
 # Display banner
@@ -693,6 +745,33 @@ function Get-AdditionalPathsInteractive {
     return $paths
 }
 
+function Get-AppDataModeInteractive {
+    Write-Host ""
+    Write-Host "---------------------------------------------------------------" -ForegroundColor Cyan
+    Write-Host " AppData Handling" -ForegroundColor Yellow
+    Write-Host "---------------------------------------------------------------" -ForegroundColor Cyan
+    Write-Host ""
+
+    Write-Host "AppData contains application settings, caches, and temporary files." -ForegroundColor White
+    Write-Host ""
+
+    $options = @(
+        "Skip all AppData (smallest backup, no app settings)",
+        "Include AppData\Roaming only (settings & saves, skip caches)",
+        "Include all AppData (largest backup, everything preserved)"
+    )
+
+    $choice = Show-Menu -Title "Select AppData Handling" -Options $options -DefaultChoice 2
+
+    switch ($choice) {
+        1 { return 'None' }
+        2 { return 'RoamingOnly' }
+        3 { return 'Full' }
+    }
+
+    return 'Full'  # Default fallback
+}
+
 function Get-RobocopyOptionsInteractive {
     Write-Host ""
     Write-Host "---------------------------------------------------------------" -ForegroundColor Cyan
@@ -739,7 +818,8 @@ function Get-RobocopyOptionsInteractive {
 
 function Get-InteractiveConfiguration {
     param(
-        [bool]$QuickMode = $false
+        [bool]$QuickMode = $false,
+        [int]$ModeChoice = 2
     )
 
     Write-Host ""
@@ -775,6 +855,11 @@ function Get-InteractiveConfiguration {
             $config.AdditionalPaths = @()
         }
 
+        # AppData mode selection (only for Custom mode = ModeChoice 4)
+        if ($ModeChoice -eq 4) {
+            $config.AppDataMode = Get-AppDataModeInteractive
+        }
+
         # Robocopy options
         $robocopyConfig = Get-RobocopyOptionsInteractive
         $config += $robocopyConfig
@@ -784,6 +869,7 @@ function Get-InteractiveConfiguration {
         $config.Threads = 8
         $config.Retries = 2
         $config.RetryDelaySeconds = 5
+        $config.AppDataMode = $null  # Will be set by mode choice
     }
 
     # Confirmation
@@ -819,10 +905,44 @@ function Get-InteractiveConfiguration {
         }
     }
 
+    # Show AppData handling mode
+    $appDataModeToShow = if ($config.AppDataMode) { $config.AppDataMode } else { "Full (default)" }
+    if ($ModeChoice -eq 1) {
+        Write-Host "AppData Handling: Essential Folders Only (no AppData)" -ForegroundColor White
+    }
+    elseif ($ModeChoice -eq 2) {
+        Write-Host "AppData Handling: Roaming only (settings/saves)" -ForegroundColor White
+    }
+    elseif ($ModeChoice -eq 3) {
+        Write-Host "AppData Handling: Full (all AppData included)" -ForegroundColor White
+    }
+    elseif ($config.AppDataMode) {
+        Write-Host "AppData Handling: $($config.AppDataMode)" -ForegroundColor White
+    }
+
     Write-Host ""
+    Write-Host "---------------------------------------------------------------" -ForegroundColor Cyan
+    Write-Host ""
+
     $confirm = Read-Host "Continue with this configuration? (Y/N) [default: Y]"
     if ($confirm -match '^[Nn]') {
         throw "Backup cancelled by user."
+    }
+
+    # Dry run option
+    Write-Host ""
+    Write-Host "Dry Run Mode allows you to preview what will be backed up without" -ForegroundColor Yellow
+    Write-Host "actually copying any files. This is useful to verify the configuration." -ForegroundColor Yellow
+    Write-Host ""
+    $dryRunChoice = Read-Host "Do you want to run in DRY RUN mode (preview only)? (Y/N) [default: N]"
+    if ($dryRunChoice -match '^[Yy]') {
+        $config.DryRun = $true
+        Write-Host ""
+        Write-Host "DRY RUN MODE ENABLED - No files will be copied!" -ForegroundColor Cyan
+        Write-Host ""
+    }
+    else {
+        $config.DryRun = $false
     }
 
     return $config
@@ -832,6 +952,51 @@ function Get-UserProfileBackupPath {
     $userProfile = [Environment]::GetFolderPath('UserProfile')
     $name = Split-Path -Path $userProfile -Leaf
     return @{ Name = $name; Path = $userProfile }
+}
+
+function Get-EssentialFoldersBackupPaths {
+    <#
+    .SYNOPSIS
+    Returns only essential user folders (Documents, Desktop, Pictures, etc.) without AppData.
+    #>
+    $userProfile = [Environment]::GetFolderPath('UserProfile')
+    $userName = Split-Path -Path $userProfile -Leaf
+
+    $essentialFolders = @(
+        @{ SpecialFolder = 'Desktop'; FallbackName = 'Desktop' },
+        @{ SpecialFolder = 'MyDocuments'; FallbackName = 'Documents' },
+        @{ SpecialFolder = 'MyPictures'; FallbackName = 'Pictures' },
+        @{ SpecialFolder = 'MyVideos'; FallbackName = 'Videos' },
+        @{ SpecialFolder = 'MyMusic'; FallbackName = 'Music' },
+        @{ SpecialFolder = 'Downloads'; FallbackName = 'Downloads' },
+        @{ SpecialFolder = 'Favorites'; FallbackName = 'Favorites' }
+    )
+
+    $items = @()
+    foreach ($folder in $essentialFolders) {
+        try {
+            $folderPath = [Environment]::GetFolderPath($folder.SpecialFolder)
+            if ([string]::IsNullOrWhiteSpace($folderPath)) {
+                # Try manual path construction
+                $folderPath = Join-Path $userProfile $folder.FallbackName
+            }
+
+            if (Test-Path -LiteralPath $folderPath) {
+                $folderName = Split-Path -Path $folderPath -Leaf
+                # Use format: Username-FolderName for clarity in backup
+                $items += @{ Name = "$userName-$folderName"; Path = $folderPath }
+                Write-Verbose "Added essential folder: $folderPath"
+            }
+            else {
+                Write-Verbose "Skipping non-existent essential folder: $folderPath"
+            }
+        }
+        catch {
+            Write-Verbose "Unable to process essential folder $($folder.SpecialFolder): $($_.Exception.Message)"
+        }
+    }
+
+    return $items
 }
 
 function Format-ByteSize {
@@ -945,12 +1110,23 @@ function Resolve-BackupItems {
         [bool]$IncludePublicProfile,
 
         [Parameter(Mandatory = $false)]
-        [string[]]$ExtraPaths
+        [string[]]$ExtraPaths,
+
+        [ValidateSet('None', 'RoamingOnly', 'Full', 'EssentialFoldersOnly')]
+        [string]$AppDataMode = 'Full'
     )
 
     $items = @()
     if ($IncludeCurrentUser) {
-        $items += Get-UserProfileBackupPath
+        if ($AppDataMode -eq 'EssentialFoldersOnly') {
+            # Only backup essential folders (Documents, Desktop, etc.) without AppData
+            $items += Get-EssentialFoldersBackupPaths
+            Write-Verbose "Using EssentialFoldersOnly mode - backing up individual folders"
+        }
+        else {
+            # Backup entire user profile (AppData filtering happens in Invoke-RobocopyBackup)
+            $items += Get-UserProfileBackupPath
+        }
     }
 
     if ($IncludeAllUsers) {
@@ -1255,7 +1431,10 @@ function Invoke-RobocopyBackup {
 
         [int]$CurrentItem = 1,
 
-        [int]$TotalItems = 1
+        [int]$TotalItems = 1,
+
+        [ValidateSet('None', 'RoamingOnly', 'Full', 'EssentialFoldersOnly')]
+        [string]$AppDataMode = 'Full'
     )
 
     # Show progress indicator
@@ -1286,6 +1465,23 @@ function Invoke-RobocopyBackup {
     if ($LogFile) {
         $arguments += "/LOG+:$LogFile"
     }
+
+    # Add AppData exclusions based on mode
+    if ($AppDataMode -eq 'RoamingOnly') {
+        # Exclude AppData\Local and AppData\LocalLow, keep AppData\Roaming
+        $arguments += '/XD'
+        $arguments += 'AppData\Local'
+        $arguments += 'AppData\LocalLow'
+        Write-Verbose "AppDataMode: RoamingOnly - Excluding AppData\Local and AppData\LocalLow"
+    }
+    elseif ($AppDataMode -eq 'None') {
+        # Exclude all AppData
+        $arguments += '/XD'
+        $arguments += 'AppData'
+        Write-Verbose "AppDataMode: None - Excluding all AppData"
+    }
+    # EssentialFoldersOnly is handled at the Resolve-BackupItems level, not here
+    # Full mode has no exclusions
 
     Write-Host "Starting Robocopy operation..." -ForegroundColor Cyan
     $command = "robocopy $($arguments -join ' ')"
@@ -1359,15 +1555,57 @@ if ($isInteractive) {
     Write-Host "This wizard will guide you through configuring your backup." -ForegroundColor White
     Write-Host ""
 
+    # Display detailed backup mode explanations
+    Write-Host "Understanding Backup Modes:" -ForegroundColor Yellow
+    Write-Host "----------------------------" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "[1] Essential Files Only" -ForegroundColor Green
+    Write-Host "    - Backs up: Documents, Desktop, Pictures, Videos, Music, Downloads" -ForegroundColor White
+    Write-Host "    - Skips: All AppData (no application settings or caches)" -ForegroundColor Gray
+    Write-Host "    - Size: Smallest (typically 5-50 GB)" -ForegroundColor White
+    Write-Host "    - Best for: Fresh Linux start, you'll reconfigure applications" -ForegroundColor White
+    Write-Host ""
+    Write-Host "[2] Essential + Settings (Recommended)" -ForegroundColor Green
+    Write-Host "    - Backs up: Essential files + AppData\Roaming" -ForegroundColor White
+    Write-Host "    - Includes: App settings, game saves, browser bookmarks/passwords" -ForegroundColor White
+    Write-Host "    - Skips: AppData\Local (caches, temp files, shader caches)" -ForegroundColor Gray
+    Write-Host "    - Size: Medium (typically 10-80 GB)" -ForegroundColor White
+    Write-Host "    - Best for: Preserve settings without bloat" -ForegroundColor White
+    Write-Host ""
+    Write-Host "[3] Full User Profile" -ForegroundColor Green
+    Write-Host "    - Backs up: Everything in your user folder" -ForegroundColor White
+    Write-Host "    - Includes: ALL AppData (Roaming + Local + LocalLow)" -ForegroundColor White
+    Write-Host "    - Warning: AppData\Local can be 10GB+ with browser/Steam caches!" -ForegroundColor Yellow
+    Write-Host "    - Size: Largest (can exceed 100+ GB)" -ForegroundColor White
+    Write-Host "    - Best for: Maximum preservation, forensics, unsure what you need" -ForegroundColor White
+    Write-Host ""
+    Write-Host "[4] Custom Backup" -ForegroundColor Green
+    Write-Host "    - Full control: Choose users, folders, network shares, AppData handling" -ForegroundColor White
+    Write-Host "    - Best for: Advanced users with specific requirements" -ForegroundColor White
+    Write-Host ""
+    Write-Host "Note: AppData\Roaming stores app settings/saves (~1-10 GB)" -ForegroundColor Cyan
+    Write-Host "      AppData\Local stores caches/temp files (~5-50 GB, often unnecessary)" -ForegroundColor Cyan
+    Write-Host ""
+
     $options = @(
-        "Quick Backup - Minimal configuration (current user profile to local path)",
-        "Custom Backup - Full configuration (all options, network shares, additional folders)"
+        "Essential Files Only (No AppData)",
+        "Essential + Settings (AppData\Roaming only) [RECOMMENDED]",
+        "Full User Profile (All AppData)",
+        "Custom Backup (Full control)"
     )
 
-    $modeChoice = Show-Menu -Title "Select Backup Mode" -Options $options -DefaultChoice 1
-    $quickMode = ($modeChoice -eq 1)
+    $modeChoice = Show-Menu -Title "Select Backup Mode" -Options $options -DefaultChoice 2
+    $quickMode = ($modeChoice -le 3)
 
-    $interactiveConfig = Get-InteractiveConfiguration -QuickMode $quickMode
+    # Map mode choice to AppDataMode
+    switch ($modeChoice) {
+        1 { $AppDataMode = 'EssentialFoldersOnly' }
+        2 { $AppDataMode = 'RoamingOnly' }
+        3 { $AppDataMode = 'Full' }
+        4 { $AppDataMode = 'Full' }  # Custom mode - user can override via interactive menu
+    }
+
+    $interactiveConfig = Get-InteractiveConfiguration -QuickMode $quickMode -ModeChoice $modeChoice
 
     # Apply interactive configuration to script variables
     $DestinationPath = $interactiveConfig.DestinationPath
@@ -1390,6 +1628,16 @@ if ($isInteractive) {
     $RobocopyThreads = $interactiveConfig.Threads
     $RobocopyRetries = $interactiveConfig.Retries
     $RobocopyRetryDelaySeconds = $interactiveConfig.RetryDelaySeconds
+
+    # Override AppDataMode if Custom mode provided a different selection
+    if ($interactiveConfig.AppDataMode) {
+        $AppDataMode = $interactiveConfig.AppDataMode
+    }
+
+    # Apply dry run setting from interactive config
+    if ($interactiveConfig.DryRun) {
+        $DryRun = $true
+    }
 }
 
 # Validate that DestinationPath is set (either via parameter or interactive mode)
@@ -1427,7 +1675,7 @@ try {
     }
 
     $includeCurrentUser = -not $SkipDefaultDirectories.IsPresent
-    $backupItems = Resolve-BackupItems -Destination $destination -IncludeCurrentUser:$includeCurrentUser -IncludeAllUsers:$IncludeAllUsers.IsPresent -IncludePublicProfile:$IncludePublicProfile.IsPresent -ExtraPaths $AdditionalPaths
+    $backupItems = Resolve-BackupItems -Destination $destination -IncludeCurrentUser:$includeCurrentUser -IncludeAllUsers:$IncludeAllUsers.IsPresent -IncludePublicProfile:$IncludePublicProfile.IsPresent -ExtraPaths $AdditionalPaths -AppDataMode $AppDataMode
 
     if ($backupItems.Count -eq 0) {
         throw 'No valid source directories were found to back up.'
@@ -1465,7 +1713,7 @@ try {
     $itemIndex = 0
     foreach ($item in $backupItems) {
         $itemIndex++
-        Invoke-RobocopyBackup -Item $item -LogFile $logFile -IsDryRun:$DryRun -Threads $RobocopyThreads -Retries $RobocopyRetries -RetryDelaySeconds $RobocopyRetryDelaySeconds -CurrentItem $itemIndex -TotalItems $backupItems.Count
+        Invoke-RobocopyBackup -Item $item -LogFile $logFile -IsDryRun:$DryRun -Threads $RobocopyThreads -Retries $RobocopyRetries -RetryDelaySeconds $RobocopyRetryDelaySeconds -CurrentItem $itemIndex -TotalItems $backupItems.Count -AppDataMode $AppDataMode
     }
 
     Write-Host 'Backup completed successfully.' -ForegroundColor Green

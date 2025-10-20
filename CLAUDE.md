@@ -26,6 +26,12 @@ Test the backup script on Windows using:
 # Test with additional paths
 .\backup.ps1 -DestinationPath "E:\UserBackup" -AdditionalPaths "C:\Projects" -DryRun
 
+# Test AppData filtering modes
+.\backup.ps1 -DestinationPath "E:\UserBackup" -AppDataMode RoamingOnly -DryRun  # Only settings, skip caches
+.\backup.ps1 -DestinationPath "E:\UserBackup" -AppDataMode EssentialFoldersOnly -DryRun  # Only Documents/Desktop/etc
+.\backup.ps1 -DestinationPath "E:\UserBackup" -AppDataMode None -DryRun  # Skip all AppData
+.\backup.ps1 -DestinationPath "E:\UserBackup" -AppDataMode Full -DryRun  # Include everything (default)
+
 # Test network share mounting (SMB)
 $credential = Get-Credential
 .\backup.ps1 -NetworkShare "\\nas\Migration" -NetworkCredential $credential -DestinationPath "Workstation-Backup" -DryRun
@@ -68,6 +74,32 @@ chmod +x linux-restore-helper.sh linux-data-restore.sh linux-software-inventory.
 
 ## Architecture
 
+### AppData Filtering (Recent Feature)
+
+The backup script now supports granular AppData filtering via the `-AppDataMode` parameter:
+
+**AppDataMode values:**
+- `Full` (default) - Include all AppData (Roaming, Local, LocalLow)
+- `RoamingOnly` - Include only AppData\Roaming (settings/saves), exclude Local and LocalLow (caches)
+- `None` - Exclude all AppData folders
+- `EssentialFoldersOnly` - Skip entire user profile, backup only specific folders (Documents, Desktop, Pictures, Videos, Music, Downloads, Favorites)
+
+**Why AppData filtering matters:**
+- AppData\Roaming: Typically 1-10 GB, contains app settings and game saves
+- AppData\Local: Can be 5-50+ GB, contains browser caches, temp files, Steam shader caches, etc.
+- Many users migrating to Linux don't need Windows application caches
+
+**Interactive mode improvements:**
+The interactive backup wizard now offers 4 modes with detailed explanations:
+1. **Essential Files Only** - Documents/Desktop/Pictures/etc., no AppData (smallest)
+2. **Essential + Settings** (RECOMMENDED) - Essential files + AppData\Roaming (settings/saves)
+3. **Full User Profile** - Everything including all AppData (largest, with warnings)
+4. **Custom Backup** - Full control including AppData mode selection
+
+Each mode displays estimated size ranges and use cases to help users make informed decisions.
+
+After confirming configuration, users are prompted for **Dry Run mode** - a preview-only mode that lists what would be backed up without actually copying files. This is useful for verifying the configuration before committing to a potentially long backup operation.
+
 ### New PowerShell Parameters (Recent Changes)
 
 The backup script recently added several new parameters:
@@ -76,20 +108,26 @@ The backup script recently added several new parameters:
 - `-NonInteractive` - Disables interactive mode when DestinationPath is not provided
 - **Default behavior**: When `DestinationPath` is not provided and `NonInteractive` is not set, the script launches an interactive wizard
 - **Interactive wizard features**:
-  - Mode selection: Quick Backup (minimal) vs Custom Backup (full control)
+  - Mode selection: Essential Files Only, Essential + Settings (recommended), Full Profile, or Custom Backup
+  - AppData handling: Automatic based on mode, or manual selection in Custom mode
   - Destination selection: Local path or network share (SMB/NFS)
   - User profile selection: Current user, all users, or all users + Public folder
   - Additional folders: Text entry for multiple paths
   - Robocopy tuning: Thread count, retries, retry delay (Custom mode only)
-  - Configuration confirmation before starting
+  - Configuration confirmation with summary (including AppData mode)
+  - Dry Run option: Preview backup without copying files
 
 **Interactive mode functions**:
 - `Get-InteractiveConfiguration` - Main interactive wizard orchestrator
+  - Shows configuration summary with AppData mode
+  - Prompts for confirmation
+  - Prompts for Dry Run mode (preview only, no file copying)
 - `Show-Menu` - Generic menu display and selection
 - `Get-DestinationPathInteractive` - Destination path selection
 - `Get-NetworkShareInteractive` - Network share configuration
 - `Get-UserProfileSelectionInteractive` - User profile selection menu
 - `Get-AdditionalPathsInteractive` - Multiple folder entry loop
+- `Get-AppDataModeInteractive` - AppData handling selection (Custom mode only)
 - `Get-RobocopyOptionsInteractive` - Advanced Robocopy tuning
 
 **Progress visualization** (NEW):
@@ -195,6 +233,28 @@ The data restore script has special logic to keep the new Linux desktop clean:
 5. Calls `print_package_manager_guidance()` which provides distro-specific package manager commands
 
 ## Key Implementation Patterns
+
+### AppData filtering implementation
+
+The AppData filtering feature uses a two-pronged approach:
+
+1. **EssentialFoldersOnly mode** - Handled at backup item resolution level:
+   - `Resolve-BackupItems` calls `Get-EssentialFoldersBackupPaths` instead of `Get-UserProfileBackupPath`
+   - Creates separate backup items for each essential folder (Documents, Desktop, Pictures, etc.)
+   - AppData is never included in the backup item list
+
+2. **RoamingOnly/None modes** - Handled at Robocopy execution level:
+   - `Invoke-RobocopyBackup` adds `/XD` (exclude directory) flags to Robocopy arguments
+   - `RoamingOnly`: Excludes `AppData\Local` and `AppData\LocalLow`
+   - `None`: Excludes entire `AppData` folder
+   - User profile is still backed up as a single item, but specified subdirectories are excluded
+
+3. **Full mode** - No special handling, backs up everything
+
+**Key functions:**
+- `Get-EssentialFoldersBackupPaths` - Returns array of essential folder items (Desktop, Documents, Pictures, Videos, Music, Downloads, Favorites)
+- `Resolve-BackupItems` - Accepts `AppDataMode` parameter, chooses between essential folders or full profile
+- `Invoke-RobocopyBackup` - Accepts `AppDataMode` parameter, adds Robocopy exclusion flags
 
 ### When adding new backup sources (PowerShell)
 
