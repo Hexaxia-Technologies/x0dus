@@ -6,27 +6,35 @@ Windows and Linux helper scripts to migrate to Linux.
 
 ## Overview
 
-The repository provides four companion scripts:
+The repository provides comprehensive Windows-to-Linux migration tools:
 
-- A PowerShell helper (`backup.ps1`) that copies user profiles on Windows 10
-  and Windows 11 machines to a safe location before replacing the operating
-  system with Linux. Features include granular AppData filtering (to reduce
-  backup size), hardware inventory collection (for Linux driver compatibility),
-  and installed software inventory to help with post-migration setup.
-- A Bash helper (`linux-restore-helper.sh`) that runs on Linux after the
-  migration, summarizes distro details, and guides you through locating and
-  mounting the backup drive so you can restore files.
-- A data restoration helper (`linux-data-restore.sh`) that copies a selected
-  Windows profile into the current Linux home directory, checks available
-  space, and collects Windows desktop files (excluding shortcuts) under
-  `~/oldDesktop` so the new desktop remains tidy.
-- A follow-up Bash helper (`linux-software-inventory.sh`) that inspects the
-  mounted backup, summarizes the Windows software inventory, and prints
-  reinstall guidance tailored to the detected Linux distribution.
+### Windows Backup Script (PowerShell)
+- **`backup.ps1`** - Copies user profiles from Windows 10/11 machines to a safe
+  location before replacing the operating system. Features include granular
+  AppData filtering (to reduce backup size), hardware inventory collection (for
+  Linux driver compatibility), and installed software inventory to help with
+  post-migration setup.
 
-Both Linux helpers record their activity under `~/x0dus`, a workspace folder
+### Linux Migration Helpers (Bash)
+- **`linux-restore-helper.sh`** - Runs on Linux after migration, summarizes
+  distro details, and guides you through locating and mounting the backup drive.
+- **`linux-data-restore.sh`** - Copies a selected Windows profile into the
+  current Linux home directory, checks available space, and collects Windows
+  desktop files (excluding shortcuts) under `~/oldDesktop`.
+- **`linux-software-inventory.sh`** - Inspects the mounted backup, summarizes
+  the Windows software inventory, and provides reinstall guidance tailored to
+  your Linux distribution.
+- **`linux-hardware-helper.sh`** - Analyzes Windows hardware inventory and
+  provides Linux driver compatibility guidance, detecting potential issues with
+  GPUs, Wi-Fi adapters, and other hardware.
+- **`linux-ai-prompt-generator.sh`** - Generates ready-to-use AI chatbot prompts
+  based on your migration context, helping you get personalized assistance from
+  ChatGPT, Claude, Gemini, or other AI assistants.
+
+All Linux helpers record their activity under `~/x0dus`, a workspace folder
 in the current user's home directory that keeps logs, detected system details,
-and handy path references so you can resume the migration at any point.
+hardware/software reports, and handy path references so you can resume the
+migration at any point.
 
 ## Requirements
 
@@ -425,3 +433,69 @@ saved Windows application list.
    (and updates `~/x0dus/installed-software-names-latest.txt`), and prints
    package manager guidance tailored to the detected distribution. When Python
    3 is unavailable it reminds you to open the CSV manually.
+
+### Linux hardware compatibility helper
+
+Run `linux-hardware-helper.sh` to analyze your Windows hardware inventory and
+get Linux-specific driver guidance.
+
+1. Download `linux-hardware-helper.sh` to the Linux machine and make it
+   executable:
+
+   ```bash
+   chmod +x linux-hardware-helper.sh
+   ```
+
+2. Execute the script with the backup mount point:
+
+   ```bash
+   ./linux-hardware-helper.sh /mnt/backup
+   ```
+
+3. The helper analyzes your hardware inventory and provides:
+   - Detection of problematic hardware (NVIDIA/AMD GPUs, Broadcom Wi-Fi, etc.)
+   - Distro-specific driver installation commands
+   - Color-coded warnings (Red/Yellow/Green) for hardware compatibility
+   - Checks if drivers are already installed on your system
+   - Detailed compatibility report saved to `~/x0dus/hardware-compatibility-report.txt`
+
+### AI migration assistant helper
+
+Run `linux-ai-prompt-generator.sh` to generate personalized AI chatbot prompts
+based on your migration context.
+
+1. Download `linux-ai-prompt-generator.sh` to the Linux machine and make it
+   executable:
+
+   ```bash
+   chmod +x linux-ai-prompt-generator.sh
+   ```
+
+2. Execute the script (it will use remembered paths from previous helpers):
+
+   ```bash
+   ./linux-ai-prompt-generator.sh
+   ```
+
+3. The helper generates ready-to-use prompts for:
+   - **Hardware compatibility** - Driver installation and compatibility issues
+   - **Software alternatives** - Finding Linux equivalents for Windows apps
+   - **Gaming setup** - Configuring Steam, Proton, Lutris, and Wine (if games detected)
+   - **Development environment** - Recreating your dev tools setup (if dev tools detected)
+   - **Troubleshooting template** - Customizable template for specific problems
+   - **General migration guidance** - Comprehensive beginner-friendly guidance
+
+4. All prompts are saved to `~/x0dus/ai-prompts/` with an index file explaining
+   each prompt. Simply copy the prompt text and paste it into ChatGPT, Claude,
+   Gemini, or any other AI chatbot for personalized assistance.
+
+### Recommended workflow
+
+For the smoothest migration experience, run the helpers in this order:
+
+1. **On Windows:** Run `backup.ps1` to create the backup with hardware and software inventories
+2. **On Linux:** Run `linux-restore-helper.sh` to mount the backup drive
+3. **On Linux:** Run `linux-data-restore.sh` to copy your Windows profile
+4. **On Linux:** Run `linux-hardware-helper.sh` to check hardware compatibility
+5. **On Linux:** Run `linux-software-inventory.sh` to see software alternatives
+6. **On Linux:** Run `linux-ai-prompt-generator.sh` to generate AI assistance prompts

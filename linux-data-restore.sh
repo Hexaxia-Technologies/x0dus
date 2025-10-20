@@ -4,6 +4,7 @@
 
 set -euo pipefail
 
+SCRIPT_VERSION="1.0.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
 if [[ -z ${HOME:-} ]]; then
@@ -30,6 +31,60 @@ PROFILE_PATH=""
 DRY_RUN=0
 DESKTOP_PREVIEW_ONLY=0
 
+show_banner() {
+  local subtitle="$1"
+  local cyan='\033[36m'
+  local reset='\033[0m'
+
+  printf "${cyan}"
+  cat <<'BANNER'
+                         =======
+                      ==============
+                   =====================
+                 =========================
+               =============================
+             =================================
+            ===================================
+           =====================================
+          ===+===+===+===+===+===+===+===+===+===
+         ===+===+===+===+===+===+===+===+===+===+
+        ===+===+===+===+===+===+===+===+===+===+===
+       ===+===+===+===+===+===+===+===+===+===+===+=
+       ===+===+===+===+===+===+===+===+===+===+===+=
+      ===+===+===+===+===+===+===+===+===+===+===+==
+      ===+===+===+===+===+===+===+===+===+===+===+==
+      ===+===+===+===+===+===+===+===+===+===+===+==
+       ===+===+===+===+===+===+===+===+===+===+===+=
+       ===+===+===+===+===+===+===+===+===+===+===+=
+        ===+===+===+===+===+===+===+===+===+===+===
+         ===+===+===+===+===+===+===+===+===+===+
+          ===+===+===+===+===+===+===+===+===+===
+           =====================================
+            ===================================
+             =================================
+               =============================
+                 =========================
+                   =====================
+                      ==============
+                         =======
+BANNER
+
+  printf "           x0dus Migration Toolkit v%s\n" "$SCRIPT_VERSION"
+  printf "                     %s\n" "$subtitle"
+  printf "       Windows to Linux Migration - Data Backup and\n"
+  printf "                   Restore Utility\n"
+  printf "             Developed by Hexaxia Technologies\n"
+  printf "                   https://hexaxia.tech\n"
+  printf "                    Report issues at:\n"
+  printf "       github.com/Hexaxia-Technologies/x0dus/issues\n"
+  printf "================================================================\n"
+  printf "DISCLAIMER: This software is provided \"as is\" without warranty\n"
+  printf "of any kind. Use at your own risk. Hexaxia Technologies assumes\n"
+  printf "no liability for data loss or damages from use of this software.\n"
+  printf "================================================================\n"
+  printf "${reset}\n"
+}
+
 print_header() {
   local title="$1"
   local underline
@@ -49,6 +104,7 @@ Options:
   --backup-root PATH   Path to the mounted Windows backup (contains Users/...).
   --profile PATH       Path to the specific Windows user profile to restore.
   --dry-run            Preview the copy operations without modifying files.
+  --version            Show version information and exit.
   -h, --help           Show this help message and exit.
 USAGE
 }
@@ -75,6 +131,12 @@ parse_args() {
       --dry-run)
         DRY_RUN=1
         shift
+        ;;
+      --version)
+        printf 'linux-data-restore.sh version %s\n' "$SCRIPT_VERSION"
+        printf 'Part of x0dus Migration Toolkit\n'
+        printf 'https://hexaxia.tech\n'
+        exit 0
         ;;
       -h|--help)
         usage
@@ -619,6 +681,7 @@ write_restore_summary() {
 
 main() {
   parse_args "$@"
+  show_banner "Import Windows Profile to Linux"
   setup_workspace
   detect_distro
   record_system_info

@@ -4,12 +4,67 @@
 
 set -euo pipefail
 
+SCRIPT_VERSION="1.0.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
 SELECTED_SOURCE_DESCRIPTION=""
 DETECTED_DISTRO_NAME="Unknown"
 DETECTED_DISTRO_VERSION=""
 DETECTED_DISTRO_ID=""
+
+show_banner() {
+  local subtitle="$1"
+  local cyan='\033[36m'
+  local reset='\033[0m'
+
+  printf "${cyan}"
+  cat <<'BANNER'
+                         =======
+                      ==============
+                   =====================
+                 =========================
+               =============================
+             =================================
+            ===================================
+           =====================================
+          ===+===+===+===+===+===+===+===+===+===
+         ===+===+===+===+===+===+===+===+===+===+
+        ===+===+===+===+===+===+===+===+===+===+===
+       ===+===+===+===+===+===+===+===+===+===+===+=
+       ===+===+===+===+===+===+===+===+===+===+===+=
+      ===+===+===+===+===+===+===+===+===+===+===+==
+      ===+===+===+===+===+===+===+===+===+===+===+==
+      ===+===+===+===+===+===+===+===+===+===+===+==
+       ===+===+===+===+===+===+===+===+===+===+===+=
+       ===+===+===+===+===+===+===+===+===+===+===+=
+        ===+===+===+===+===+===+===+===+===+===+===
+         ===+===+===+===+===+===+===+===+===+===+
+          ===+===+===+===+===+===+===+===+===+===
+           =====================================
+            ===================================
+             =================================
+               =============================
+                 =========================
+                   =====================
+                      ==============
+                         =======
+BANNER
+
+  printf "           x0dus Migration Toolkit v%s\n" "$SCRIPT_VERSION"
+  printf "                     %s\n" "$subtitle"
+  printf "       Windows to Linux Migration - Data Backup and\n"
+  printf "                   Restore Utility\n"
+  printf "             Developed by Hexaxia Technologies\n"
+  printf "                   https://hexaxia.tech\n"
+  printf "                    Report issues at:\n"
+  printf "       github.com/Hexaxia-Technologies/x0dus/issues\n"
+  printf "================================================================\n"
+  printf "DISCLAIMER: This software is provided \"as is\" without warranty\n"
+  printf "of any kind. Use at your own risk. Hexaxia Technologies assumes\n"
+  printf "no liability for data loss or damages from use of this software.\n"
+  printf "================================================================\n"
+  printf "${reset}\n"
+}
 
 print_header() {
   local title="$1"
@@ -566,7 +621,49 @@ mount_device() {
 }
 
 
+show_help() {
+  cat <<'HELP'
+Usage: linux-restore-helper.sh [OPTIONS]
+
+Locate and mount the Windows backup drive to begin the migration process.
+
+Options:
+  --version    Show version information and exit
+  -h, --help   Show this help message and exit
+
+This helper will:
+  1. Detect your Linux distribution and system information
+  2. Display available storage devices
+  3. Guide you through mounting the backup location (local or network)
+  4. Verify the backup contents
+  5. Suggest next steps for data restoration
+
+HELP
+}
+
 main() {
+  # Parse command-line arguments
+  for arg in "$@"; do
+    case "$arg" in
+      --version)
+        printf 'linux-restore-helper.sh version %s\n' "$SCRIPT_VERSION"
+        printf 'Part of x0dus Migration Toolkit\n'
+        printf 'https://hexaxia.tech\n'
+        exit 0
+        ;;
+      -h|--help)
+        show_help
+        exit 0
+        ;;
+      *)
+        echo "Unknown option: $arg" >&2
+        echo "Use --help for usage information." >&2
+        exit 1
+        ;;
+    esac
+  done
+
+  show_banner "Locate and Mount Windows Backup"
   print_header "Linux migration helper"
   detect_distro
   report_git_status

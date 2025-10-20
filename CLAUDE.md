@@ -12,11 +12,13 @@ The x0dus migration toolkit is feature-complete for v1.0 and ready for real-worl
 
 ## Project Overview
 
-x0dus is a Windows-to-Linux migration toolkit consisting of four companion scripts:
+x0dus is a Windows-to-Linux migration toolkit consisting of six companion scripts (all v1.0.0):
 - `backup.ps1` (PowerShell) - Backs up Windows user profiles before OS replacement
 - `linux-restore-helper.sh` (Bash) - Helps locate and mount the backup drive on Linux
 - `linux-data-restore.sh` (Bash) - Restores Windows profile data to Linux home directory
 - `linux-software-inventory.sh` (Bash) - Analyzes Windows software inventory and provides Linux reinstall guidance
+- `linux-hardware-helper.sh` (Bash) - Analyzes Windows hardware inventory for Linux driver compatibility
+- `linux-ai-prompt-generator.sh` (Bash) - Generates AI chatbot prompts based on migration context
 
 ## Testing and Development
 
@@ -65,7 +67,11 @@ Test the Linux helpers using:
 
 ```bash
 # Make scripts executable
-chmod +x linux-restore-helper.sh linux-data-restore.sh linux-software-inventory.sh
+chmod +x linux-restore-helper.sh linux-data-restore.sh linux-software-inventory.sh linux-hardware-helper.sh linux-ai-prompt-generator.sh
+
+# Test version and help flags
+./linux-restore-helper.sh --version
+./linux-restore-helper.sh --help
 
 # Test restore helper (interactive)
 ./linux-restore-helper.sh
@@ -78,6 +84,12 @@ chmod +x linux-restore-helper.sh linux-data-restore.sh linux-software-inventory.
 
 # Test software inventory
 ./linux-software-inventory.sh /mnt/backup
+
+# Test hardware compatibility helper
+./linux-hardware-helper.sh /mnt/backup
+
+# Test AI prompt generator
+./linux-ai-prompt-generator.sh
 ```
 
 ## Architecture
@@ -224,14 +236,28 @@ Before starting the backup, the script performs comprehensive validation:
 
 ### Shared State Management (Linux helpers)
 
-All three Linux helpers share state through `~/x0dus/` workspace directory:
+All Linux helpers share state through `~/x0dus/` workspace directory:
+
+**Shared metadata files:**
 - `mount-point.txt` - Remembered backup mount location
 - `windows-profile-path.txt` - Selected Windows profile path
 - `installed-software-inventory-path.txt` - Path to Windows software CSV
 - `installed-software-names-path.txt` - Path to extracted software names
+- `hardware-inventory-path.txt` - Path to Windows hardware CSV (NEW)
 - `system-info.txt` - Detected distro and system information (appended by each helper)
 - `git-info.txt` - Git availability and repository status
 - Log files for each helper (`linux-*.log`)
+
+**Output files:**
+- `hardware-compatibility-report.txt` - Hardware analysis results (linux-hardware-helper.sh)
+- `ai-prompts/` directory - Generated AI prompts (linux-ai-prompt-generator.sh)
+  - `index.md` - Prompt index and usage guide
+  - `01-hardware-compatibility.txt` - Hardware/driver prompt
+  - `02-software-alternatives.txt` - Software migration prompt
+  - `03-gaming-setup.txt` - Gaming configuration prompt (conditional)
+  - `04-development-environment.txt` - Dev tools setup prompt (conditional)
+  - `05-troubleshooting-template.txt` - Generic troubleshooting template
+  - `06-general-migration-guidance.txt` - Beginner-friendly guidance
 
 **Critical pattern**: Helpers use `remember_path()` and `load_remembered_path()` functions to persist and retrieve values between runs. This enables sequential execution without re-prompting.
 
@@ -271,8 +297,34 @@ Supported families: Debian/Ubuntu, Fedora/RHEL, Arch, openSUSE, Gentoo, Alpine, 
 - `/TEE` - Output to console and log file
 - `/L` - List only mode (added when `-DryRun` specified)
 
-### Bash Script Error Handling
+### Bash Script Architecture
 
+All bash scripts follow consistent patterns (v1.0.0):
+
+**Version Management:**
+```bash
+SCRIPT_VERSION="1.0.0"
+```
+- Every script has version variable
+- `--version` flag: `printf 'script-name.sh version %s\n' "$SCRIPT_VERSION"`
+- Displayed in banner
+
+**Banner Function:**
+```bash
+show_banner() {
+  local subtitle="$1"
+  # Displays hexagonal ASCII logo with version and branding
+  # Color: cyan (ANSI \033[36m) - approximates Hexaxia #77bfab
+  # Includes: version, subtitle, Hexaxia branding, GitHub link, disclaimer
+}
+```
+
+**Help System:**
+- `show_help()` function in every script
+- `-h, --help` flag support
+- Usage documentation with examples
+
+**Error Handling:**
 All bash helpers use:
 ```bash
 set -euo pipefail
@@ -296,6 +348,149 @@ The data restore script has special logic to keep the new Linux desktop clean:
 3. Creates timestamped snapshot: `installed-software-names-<timestamp>.txt`
 4. Symlinks to `installed-software-names-latest.txt` for quick access
 5. Calls `print_package_manager_guidance()` which provides distro-specific package manager commands
+
+### Hardware Compatibility Helper (NEW in v1.0.0)
+
+`linux-hardware-helper.sh` analyzes Windows hardware inventory for Linux driver compatibility:
+
+**Purpose:**
+- Detect hardware that may need special drivers or configuration on Linux
+- Provide distro-specific installation commands
+- Check if drivers are already loaded on the current system
+- Generate detailed compatibility report
+
+**Analysis Categories:**
+1. **GPU Analysis** (`analyze_gpu`)
+   - Detects NVIDIA, AMD, and Intel graphics cards
+   - NVIDIA: Yellow warning, checks for nvidia driver (lsmod), provides proprietary driver commands
+   - AMD: Yellow warning, checks for amdgpu driver, Mesa driver commands
+   - Intel: Green OK, built-in driver support
+   - Distro-specific commands for each GPU vendor
+
+2. **Network Analysis** (`analyze_network`)
+   - Detects Broadcom Wi-Fi (yellow warning, often needs firmware)
+   - Intel Wi-Fi (green OK, iwlwifi driver usually included)
+   - Realtek adapters (yellow warning, may need r8168 instead of r8169)
+   - Provides installation commands for each adapter type
+
+3. **Audio Analysis** (`analyze_audio`)
+   - Detects audio devices
+   - Usually green OK (ALSA/PulseAudio/PipeWire work out-of-box)
+
+4. **USB Analysis** (`analyze_usb`)
+   - Counts USB controllers
+   - Always green OK (excellent Linux support)
+
+**Driver Detection Functions:**
+- `check_driver_loaded` - Uses lsmod to check if kernel module is loaded
+- `check_package_installed` - Checks with dpkg/rpm/pacman if driver package is installed
+- `get_driver_install_command` - Returns distro-specific installation commands
+
+**Color-coded Output:**
+- Uses ANSI color codes for clear visual feedback
+- RED: Known compatibility issues requiring attention
+- YELLOW: May require additional drivers or configuration
+- GREEN: Good Linux support, works out-of-the-box
+- CYAN: Informational headers
+
+**Report Generation:**
+- Saves detailed report to `~/x0dus/hardware-compatibility-report.txt`
+- Includes device names, status, and installation commands
+- Summary with legend explaining color codes
+
+**Use Case:**
+Run immediately after installing Linux to identify hardware that needs drivers before issues occur (e.g., no WiFi, no graphics acceleration).
+
+### AI Prompt Generator (NEW in v1.0.0)
+
+`linux-ai-prompt-generator.sh` generates contextual AI chatbot prompts for migration assistance:
+
+**Purpose:**
+- Bridge the knowledge gap between Windows and Linux
+- Provide copy-paste-ready prompts for AI chatbots (ChatGPT, Claude, Gemini, etc.)
+- Context-aware: includes user's specific distro, hardware, and software
+- Future-proof: works with any AI chatbot, not tied to specific tools
+
+**Generated Prompt Types:**
+
+1. **Hardware Compatibility Prompt** (`01-hardware-compatibility.txt`)
+   - Includes full hardware-inventory.csv data
+   - Asks for driver installation commands specific to user's distro
+   - Questions about proprietary vs open-source drivers
+   - Always generated if hardware inventory exists
+
+2. **Software Alternatives Prompt** (`02-software-alternatives.txt`)
+   - Includes list of Windows applications from software inventory
+   - Asks for Linux alternatives (native, Flatpak, Snap, Wine)
+   - Prioritizes open-source and native packages
+   - Always generated if software inventory exists
+
+3. **Gaming Setup Prompt** (`03-gaming-setup.txt`) - *Conditional*
+   - Generated only if gaming software detected (Steam, Epic, GOG, etc.)
+   - Covers Steam, Proton, Lutris, Wine configuration
+   - GPU-specific gaming optimizations
+   - Anti-cheat compatibility questions
+
+4. **Development Environment Prompt** (`04-development-environment.txt`) - *Conditional*
+   - Generated only if dev tools detected (VS Code, IDEs, Docker, etc.)
+   - Asks about IDE alternatives and setup
+   - Docker without Docker Desktop
+   - Language version managers (nvm, pyenv, etc.)
+
+5. **Troubleshooting Template** (`05-troubleshooting-template.txt`)
+   - Customizable template for specific problems
+   - Pre-filled with user's distro and hardware info
+   - Always generated
+
+6. **General Migration Guidance** (`06-general-migration-guidance.txt`)
+   - Beginner-friendly comprehensive guide
+   - File system navigation, software management, system configuration
+   - Always generated
+
+**Prompt Structure:**
+```
+# Prompt Title
+# Metadata (generated date, distro, version)
+
+========================================
+COPY THE TEXT BELOW TO YOUR AI CHATBOT:
+========================================
+
+[Pre-filled prompt with user's context]
+
+**My System:**
+- Distribution: [detected distro]
+- Package Manager: [detected PM]
+- Hardware: [relevant hardware]
+
+**[Category-specific data]**
+
+**Questions:**
+1. Question 1...
+2. Question 2...
+...
+
+========================================
+```
+
+**Index File** (`index.md`):
+- Markdown index explaining each prompt
+- When to use each prompt
+- Tips for best results with AI chatbots
+- Links to supported AI platforms
+
+**Smart Detection:**
+- Uses grep to detect gaming software (case-insensitive pattern matching)
+- Detects dev tools (IDEs, Docker, language runtimes)
+- Only generates relevant prompts (avoids prompt fatigue)
+
+**Dependencies:**
+- Requires hardware/software inventories to be present
+- Falls back gracefully if files missing
+- Provides instructions to run prerequisite helpers
+
+**Use Case:**
+Run after all other helpers to get comprehensive AI assistance. Users can then copy prompts into their preferred AI chatbot for personalized migration guidance that accounts for vast hardware/software ecosystem diversity.
 
 ### Hardware Inventory Export
 
@@ -531,6 +726,8 @@ If implementing future enhancements, recommended priority order:
 ## Version History
 
 - **v1.0.0** (2025-10-20) - Initial production release
+
+  **PowerShell (backup.ps1):**
   - Interactive wizard with 4 backup modes
   - Granular AppData filtering (Full, RoamingOnly, None, EssentialFoldersOnly)
   - Hardware inventory export for Linux driver compatibility
@@ -538,4 +735,41 @@ If implementing future enhancements, recommended priority order:
   - Pre-flight space checks with go/no-go prompts
   - Comprehensive error handling and retry logic
   - Network share support (SMB/NFS)
-  - Professional branding with disclaimer
+  - Professional branding with hexagonal logo and disclaimer
+
+  **Bash Scripts (all):**
+  - Consistent branding with hexagonal ASCII logo (cyan color)
+  - Version management (SCRIPT_VERSION variable)
+  - --version and --help flag support
+  - Professional banners with Hexaxia branding and disclaimer
+
+  **linux-restore-helper.sh:**
+  - Locate and mount backup drives (local or network)
+  - SMB and NFS support
+  - Git availability detection
+
+  **linux-data-restore.sh:**
+  - Restore Windows profile to Linux home directory
+  - Desktop file handling (excludes shortcuts)
+  - Space availability checking
+
+  **linux-software-inventory.sh:**
+  - Parse Windows software inventory CSV
+  - Extract unique application names
+  - Distro-specific package manager guidance
+
+  **linux-hardware-helper.sh (NEW):**
+  - Analyze hardware inventory for Linux compatibility
+  - Detect problematic hardware (NVIDIA/AMD GPUs, Broadcom WiFi, Realtek network)
+  - Distro-specific driver installation commands
+  - Color-coded warnings (Red/Yellow/Green)
+  - Check if drivers already loaded
+  - Generate detailed compatibility report
+
+  **linux-ai-prompt-generator.sh (NEW):**
+  - Generate AI chatbot prompts based on migration context
+  - 6 prompt types: hardware, software, gaming, dev environment, troubleshooting, general
+  - Conditional prompt generation (gaming/dev only if detected)
+  - Works with ChatGPT, Claude, Gemini, and other AI chatbots
+  - Context-aware: includes distro, hardware, software data
+  - Comprehensive index with usage guidance
