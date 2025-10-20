@@ -193,15 +193,60 @@ param(
 # Display banner
 $banner = @"
 
-===============================================================================
-                         x0dus Migration Toolkit
-      Windows to Linux Migration - Data Backup and Restore Utility
-                  https://github.com/Hexaxia-Technologies
-===============================================================================
+                          =======
+                       ==============
+                    ======        =====
+                 ======              =====
+              ======                    =====
+           ======                          ======
+        =====                                 ======
+      =====                                      =====
+     ===   ++++++++++                  =========    ===
+     ===     ++++++++++              ==========     ===
+     ===       ++++++++++          ==========       ===
+     ===        ++++++++++        ==========        ===
+     ===          ++++++++++   ===========          ===
+     ===            +++++++++ ==========            ===
+     ===              +++++++ ========              ===
+     ===                                            ===
+     ===              ======= -------               ===
+     ===             ======== ---------             ===
+     ===           ==========  ----------           ===
+     ===         ==========      ----------         ===
+     ===       ==========          ----------       ===
+     ===     ===========            ----------      ===
+     ===    ==========                ----------    ===
+     =====   ==                             ==    ====
+       ======                                  ======
+          ======                            ======
+              =====                      =====
+                 =====                =====
+                    =====         ======
+                       ======  ======
+                          ========
+                             ==
+
+                  x0dus Migration Toolkit
+        Windows to Linux Migration - Data Backup and
+                    Restore Utility
+
+              Developed by Hexaxia Technologies
+                    https://hexaxia.tech
+
+                     Report issues at:
+        https://github.com/Hexaxia-Technologies/x0dus/issues
+
+================================================================
+
+DISCLAIMER: This software is provided "as is" without warranty
+of any kind. Use at your own risk. Hexaxia Technologies assumes
+no liability for data loss or damages from use of this software.
+
+================================================================
 
 "@
 
-Write-Host $banner -ForegroundColor Cyan
+Write-Host $banner -ForegroundColor DarkCyan
 
 $ErrorActionPreference = 'Stop'
 
