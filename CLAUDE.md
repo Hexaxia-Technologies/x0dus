@@ -17,6 +17,9 @@ x0dus is a Windows-to-Linux migration toolkit consisting of four companion scrip
 Test the backup script on Windows using:
 
 ```powershell
+# Interactive mode - launches wizard (DEFAULT when no DestinationPath provided)
+.\backup.ps1
+
 # Dry run to preview operations without copying
 .\backup.ps1 -DestinationPath "E:\UserBackup" -DryRun
 
@@ -32,6 +35,9 @@ $credential = Get-Credential
 
 # Test with custom Robocopy tuning (reduced threads, more retries)
 .\backup.ps1 -DestinationPath "E:\UserBackup" -RobocopyThreads 1 -RobocopyRetries 4 -RobocopyRetryDelaySeconds 10 -DryRun
+
+# Force non-interactive mode (fail if DestinationPath not provided)
+.\backup.ps1 -NonInteractive -DestinationPath "E:\UserBackup" -DryRun
 ```
 
 To bypass execution policy during testing:
@@ -65,6 +71,32 @@ chmod +x linux-restore-helper.sh linux-data-restore.sh linux-software-inventory.
 ### New PowerShell Parameters (Recent Changes)
 
 The backup script recently added several new parameters:
+
+**Interactive mode** (NEW):
+- `-NonInteractive` - Disables interactive mode when DestinationPath is not provided
+- **Default behavior**: When `DestinationPath` is not provided and `NonInteractive` is not set, the script launches an interactive wizard
+- **Interactive wizard features**:
+  - Mode selection: Quick Backup (minimal) vs Custom Backup (full control)
+  - Destination selection: Local path or network share (SMB/NFS)
+  - User profile selection: Current user, all users, or all users + Public folder
+  - Additional folders: Text entry for multiple paths
+  - Robocopy tuning: Thread count, retries, retry delay (Custom mode only)
+  - Configuration confirmation before starting
+
+**Interactive mode functions**:
+- `Get-InteractiveConfiguration` - Main interactive wizard orchestrator
+- `Show-Menu` - Generic menu display and selection
+- `Get-DestinationPathInteractive` - Destination path selection
+- `Get-NetworkShareInteractive` - Network share configuration
+- `Get-UserProfileSelectionInteractive` - User profile selection menu
+- `Get-AdditionalPathsInteractive` - Multiple folder entry loop
+- `Get-RobocopyOptionsInteractive` - Advanced Robocopy tuning
+
+**Progress visualization** (NEW):
+- `Show-RobocopyProgress` - Displays visual progress bar and item information during backup
+- Shows current item number, total items, overall progress percentage
+- Displays source and destination paths for each backup item
+- `Invoke-RobocopyBackup` updated to accept `CurrentItem` and `TotalItems` parameters
 
 **Destination management**:
 - `-ForceCreateDestination` - Automatically create destination directory without prompting (useful for automation/scripting)

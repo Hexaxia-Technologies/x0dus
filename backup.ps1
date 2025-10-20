@@ -9,6 +9,10 @@
     Additional folders can be specified when invoking the script. The goal is to make
     sure a user's data is safely stored before reinstalling the operating system.
 
+    INTERACTIVE MODE: Run the script without any parameters to launch the interactive
+    wizard, which will guide you through selecting backup options including Quick Backup
+    (minimal configuration) or Custom Backup (full control over all options).
+
 .PARAMETER DestinationPath
     The folder where the backup will be stored. The folder will be created if necessary.
 
@@ -65,9 +69,15 @@
     mount.
 
 .EXAMPLE
+    .\backup.ps1
+
+    Launches interactive mode with a wizard to guide you through backup configuration.
+    Choose between Quick Backup (simple) or Custom Backup (advanced options).
+
+.EXAMPLE
     .\backup.ps1 -DestinationPath "E:\UserBackup"
 
-    Copies the entire user profile to E:\UserBackup using Robocopy.
+    Copies the entire user profile to E:\UserBackup using Robocopy in non-interactive mode.
 
 .EXAMPLE
     .\backup.ps1 -DestinationPath "E:\UserBackup" -AdditionalPaths "C:\"
@@ -79,8 +89,7 @@
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)]
-    [ValidateNotNullOrEmpty()]
+    [Parameter(Mandatory = $false)]
     [string]$DestinationPath,
 
     [string[]]$AdditionalPaths = @(),
@@ -124,8 +133,39 @@ param(
 
     [ValidateRange(1,600)]
     [int]
-    $RobocopyRetryDelaySeconds = 5
+    $RobocopyRetryDelaySeconds = 5,
+
+    [switch]$NonInteractive
 )
+
+# Display banner
+$banner = @"
+
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣀⣀⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢰⢮⡙⠰⣎⡳⣽⣿⣶⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡟⠦⢡⢛⡼⣝⣧⢿⣿⠁⣾⡷⡤⣄⣀⣀⡀⠤⠤⡶⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣸⠹⠌⡆⣏⠾⣝⡾⣿⡇⢸⣿⣝⠣⢆⠀⠀⢀⠠⢻⠃⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣏⠧⣱⣸⣜⣯⢿⣽⡿⢀⣿⡟⣬⠓⠌⢀⠈⠀⡜⡟⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢘⣈⣩⠤⢤⢤⣄⡉⠛⠇⣸⣿⡹⢆⠍⠂⢀⠠⠑⣼⠃⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⡟⢦⠣⠞⣥⣻⢾⣿⡷⢢⣉⠓⠯⢜⣈⣄⡠⠤⠟⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⠀⣾⡙⢦⢋⡝⡶⣯⣿⣿⠃⣼⣏⢳⠒⡂⠤⠀⠒⠒⣹⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⢰⣇⠹⡆⢏⡸⢷⣿⣿⡿⢀⣿⡈⡇⠎⡀⠀⠀⠀⢆⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠀⠀⠀⠀⠀⠀⠀⠀⣼⡹⣌⣕⣫⣝⣯⣷⣿⠃⣼⢷⡙⡌⠒⠀⠀⠀⠐⣸⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⢀⡀⣀⡄⡀⢀⣀⢀⡋⣉⢠⣀⡀⠀⠉⠙⠟⢠⣿⢣⠓⡌⠡⠀⠀⢀⢡⡇⠀⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+    ⠸⠱⠹⠟⡼⠏⠧⠫⣗⡽⠻⠰⠄⠀⠀⠀⠀⠈⠙⠣⠭⠤⢁⠤⠤⠖⠚⠀⠈⠁⠀⠀⠀⡀⠀⠀⠀⡀⠀
+    ⠈⣿⡄⢠⣿⡇⠀⣿⢙⡏⢠⣀⣀⡀⠀⣀⣄⣿⡇⢀⣀⣀⢀⣀⠀⣀⡀⢀⡀⣀⣄⡀⡀⢹⡞⢹⡏⢹⡆
+    ⠀⠸⣧⣼⠉⣿⢸⡏⢸⡇⢸⡏⠉⣿⢺⡏⠈⣿⣧⣿⠉⢹⣧⢿⣄⡿⣇⣼⠻⣯⣤⣍⠐⠋⠙⢺⡗⠛⠁
+    ⠀⠀⢿⡟⠀⢹⣿⠀⢸⡇⢸⡇⠀⣿⠘⢷⣤⢿⡇⠻⣦⡼⠏⠘⣿⠃⢻⡟⠰⣦⣬⡿⠁⠀⠀⠈⠁⠀⠀
+
+    ╔═══════════════════════════════════════════════════════════════════════════════╗
+    ║                              x0dus Migration Toolkit                          ║
+    ║         Windows to Linux Migration - Data Backup and Restore Utility         ║
+    ║                      https://github.com/Hexaxia-Technologies                  ║
+    ╚═══════════════════════════════════════════════════════════════════════════════╝
+
+"@
+
+Write-Host $banner -ForegroundColor Cyan
 
 $ErrorActionPreference = 'Stop'
 
@@ -490,6 +530,318 @@ function Stop-ScriptLogging {
     catch {
         Write-Warning "Failed to stop transcript: $($_.Exception.Message)"
     }
+}
+
+function Show-Menu {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Title,
+
+        [Parameter(Mandatory = $true)]
+        [string[]]$Options,
+
+        [int]$DefaultChoice = 1
+    )
+
+    Write-Host ""
+    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host " $Title" -ForegroundColor Yellow
+    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host ""
+
+    for ($i = 0; $i -lt $Options.Count; $i++) {
+        Write-Host "  [$($i + 1)] $($Options[$i])" -ForegroundColor White
+    }
+    Write-Host ""
+
+    do {
+        $choice = Read-Host "Enter your choice (1-$($Options.Count)) [default: $DefaultChoice]"
+        if ([string]::IsNullOrWhiteSpace($choice)) {
+            $choice = $DefaultChoice
+            break
+        }
+        if ($choice -match '^\d+$' -and [int]$choice -ge 1 -and [int]$choice -le $Options.Count) {
+            break
+        }
+        Write-Host "Invalid choice. Please enter a number between 1 and $($Options.Count)." -ForegroundColor Red
+    } while ($true)
+
+    return [int]$choice
+}
+
+function Get-DestinationPathInteractive {
+    param(
+        [bool]$AllowNetworkShare = $true
+    )
+
+    Write-Host ""
+    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host " Destination Selection" -ForegroundColor Yellow
+    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host ""
+
+    if ($AllowNetworkShare) {
+        Write-Host "Choose destination type:" -ForegroundColor White
+        Write-Host "  [1] Local path (e.g., E:\UserBackup)" -ForegroundColor White
+        Write-Host "  [2] Network share (SMB/NFS)" -ForegroundColor White
+        Write-Host ""
+
+        $choice = Read-Host "Enter your choice (1-2) [default: 1]"
+        if ([string]::IsNullOrWhiteSpace($choice)) {
+            $choice = "1"
+        }
+
+        if ($choice -eq "2") {
+            return Get-NetworkShareInteractive
+        }
+    }
+
+    do {
+        Write-Host ""
+        $path = Read-Host "Enter the destination path (e.g., E:\UserBackup)"
+        if (-not [string]::IsNullOrWhiteSpace($path)) {
+            return @{
+                DestinationPath = $path
+                NetworkShare = $null
+                NetworkProtocol = $null
+                NetworkCredential = $null
+                NetworkDriveLetter = 'Z'
+            }
+        }
+        Write-Host "Path cannot be empty. Please try again." -ForegroundColor Red
+    } while ($true)
+}
+
+function Get-NetworkShareInteractive {
+    Write-Host ""
+    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host " Network Share Configuration" -ForegroundColor Yellow
+    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host ""
+
+    Write-Host "Enter network share path:" -ForegroundColor White
+    Write-Host "  SMB format: \\server\share" -ForegroundColor Gray
+    Write-Host "  NFS format: server:/export" -ForegroundColor Gray
+    Write-Host ""
+
+    do {
+        $share = Read-Host "Network share path"
+        if (-not [string]::IsNullOrWhiteSpace($share)) {
+            break
+        }
+        Write-Host "Share path cannot be empty." -ForegroundColor Red
+    } while ($true)
+
+    $protocol = Resolve-NetworkProtocol -Share $share -RequestedProtocol $null
+    Write-Host "Detected protocol: $protocol" -ForegroundColor Cyan
+
+    $credential = $null
+    if ($protocol -eq 'SMB') {
+        Write-Host ""
+        $needsCreds = Read-Host "Does this share require credentials? (Y/N) [default: N]"
+        if ($needsCreds -match '^[Yy]') {
+            $credential = Get-Credential -Message "Enter credentials for $share"
+        }
+    }
+
+    Write-Host ""
+    $destPath = Read-Host "Enter destination folder name on the share (e.g., Workstation-Backup)"
+
+    return @{
+        DestinationPath = $destPath
+        NetworkShare = $share
+        NetworkProtocol = $protocol
+        NetworkCredential = $credential
+        NetworkDriveLetter = 'Z'
+    }
+}
+
+function Get-UserProfileSelectionInteractive {
+    Write-Host ""
+    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host " User Profile Selection" -ForegroundColor Yellow
+    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host ""
+
+    $currentUser = [Environment]::UserName
+    Write-Host "Current user: $currentUser" -ForegroundColor Cyan
+    Write-Host ""
+
+    $options = @(
+        "Current user only ($currentUser)",
+        "All user profiles",
+        "All user profiles + Public folder",
+        "Skip user profiles (backup only additional folders)"
+    )
+
+    $choice = Show-Menu -Title "Select User Profiles to Backup" -Options $options -DefaultChoice 1
+
+    return @{
+        IncludeAllUsers = ($choice -eq 2 -or $choice -eq 3)
+        IncludePublicProfile = ($choice -eq 3)
+        SkipDefaultDirectories = ($choice -eq 4)
+    }
+}
+
+function Get-AdditionalPathsInteractive {
+    Write-Host ""
+    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host " Additional Folders" -ForegroundColor Yellow
+    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host ""
+
+    Write-Host "Enter additional folders to backup (one per line)." -ForegroundColor White
+    Write-Host "Examples: C:\Projects, D:\VMs, C:\ (entire drive)" -ForegroundColor Gray
+    Write-Host "Press Enter on empty line when done." -ForegroundColor White
+    Write-Host ""
+
+    $paths = @()
+    $index = 1
+    do {
+        $path = Read-Host "Additional folder $index (or press Enter to finish)"
+        if ([string]::IsNullOrWhiteSpace($path)) {
+            break
+        }
+        $paths += $path
+        $index++
+    } while ($true)
+
+    return $paths
+}
+
+function Get-RobocopyOptionsInteractive {
+    Write-Host ""
+    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host " Robocopy Tuning Options" -ForegroundColor Yellow
+    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host ""
+
+    Write-Host "Configure advanced Robocopy options? (Y/N) [default: N]" -ForegroundColor White
+    $configure = Read-Host
+
+    if ($configure -notmatch '^[Yy]') {
+        return @{
+            Threads = 8
+            Retries = 2
+            RetryDelaySeconds = 5
+        }
+    }
+
+    Write-Host ""
+    Write-Host "Number of threads for multi-threaded copying (1-128) [default: 8]" -ForegroundColor White
+    $threads = Read-Host
+    if ([string]::IsNullOrWhiteSpace($threads)) {
+        $threads = 8
+    }
+
+    Write-Host "Number of retry attempts (0-10) [default: 2]" -ForegroundColor White
+    $retries = Read-Host
+    if ([string]::IsNullOrWhiteSpace($retries)) {
+        $retries = 2
+    }
+
+    Write-Host "Retry delay in seconds (1-600) [default: 5]" -ForegroundColor White
+    $delay = Read-Host
+    if ([string]::IsNullOrWhiteSpace($delay)) {
+        $delay = 5
+    }
+
+    return @{
+        Threads = [int]$threads
+        Retries = [int]$retries
+        RetryDelaySeconds = [int]$delay
+    }
+}
+
+function Get-InteractiveConfiguration {
+    param(
+        [bool]$QuickMode = $false
+    )
+
+    Write-Host ""
+    Write-Host "╔═══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║                         Interactive Backup Configuration                      ║" -ForegroundColor Cyan
+    Write-Host "╚═══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+
+    $config = @{}
+
+    # Destination
+    $destConfig = Get-DestinationPathInteractive -AllowNetworkShare:(-not $QuickMode)
+    $config += $destConfig
+
+    # User profiles
+    if ($QuickMode) {
+        $config.IncludeAllUsers = $false
+        $config.IncludePublicProfile = $false
+        $config.SkipDefaultDirectories = $false
+    }
+    else {
+        $profileConfig = Get-UserProfileSelectionInteractive
+        $config += $profileConfig
+    }
+
+    # Additional paths
+    if (-not $QuickMode) {
+        Write-Host ""
+        $addMore = Read-Host "Do you want to add additional folders? (Y/N) [default: N]"
+        if ($addMore -match '^[Yy]') {
+            $config.AdditionalPaths = Get-AdditionalPathsInteractive
+        }
+        else {
+            $config.AdditionalPaths = @()
+        }
+
+        # Robocopy options
+        $robocopyConfig = Get-RobocopyOptionsInteractive
+        $config += $robocopyConfig
+    }
+    else {
+        $config.AdditionalPaths = @()
+        $config.Threads = 8
+        $config.Retries = 2
+        $config.RetryDelaySeconds = 5
+    }
+
+    # Confirmation
+    Write-Host ""
+    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host " Configuration Summary" -ForegroundColor Yellow
+    Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
+    Write-Host ""
+
+    if ($config.NetworkShare) {
+        Write-Host "Network Share: $($config.NetworkShare)" -ForegroundColor White
+        Write-Host "Protocol: $($config.NetworkProtocol)" -ForegroundColor White
+    }
+    Write-Host "Destination: $($config.DestinationPath)" -ForegroundColor White
+
+    if ($config.SkipDefaultDirectories) {
+        Write-Host "User Profiles: None (skip user profiles)" -ForegroundColor White
+    }
+    elseif ($config.IncludeAllUsers -and $config.IncludePublicProfile) {
+        Write-Host "User Profiles: All users + Public folder" -ForegroundColor White
+    }
+    elseif ($config.IncludeAllUsers) {
+        Write-Host "User Profiles: All users" -ForegroundColor White
+    }
+    else {
+        Write-Host "User Profiles: Current user only" -ForegroundColor White
+    }
+
+    if ($config.AdditionalPaths -and $config.AdditionalPaths.Count -gt 0) {
+        Write-Host "Additional Folders: $($config.AdditionalPaths.Count)" -ForegroundColor White
+        foreach ($path in $config.AdditionalPaths) {
+            Write-Host "  - $path" -ForegroundColor Gray
+        }
+    }
+
+    Write-Host ""
+    $confirm = Read-Host "Continue with this configuration? (Y/N) [default: Y]"
+    if ($confirm -match '^[Nn]') {
+        throw "Backup cancelled by user."
+    }
+
+    return $config
 }
 
 function Get-UserProfileBackupPath {
@@ -867,6 +1219,36 @@ function Get-LogFilePath {
     return Join-Path $logDirectory "backup-$timestamp.log"
 }
 
+function Show-RobocopyProgress {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SourcePath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$DestinationPath,
+
+        [Parameter(Mandatory = $true)]
+        [int]$CurrentItem,
+
+        [Parameter(Mandatory = $true)]
+        [int]$TotalItems
+    )
+
+    $percentOverall = [math]::Round(($CurrentItem / $TotalItems) * 100, 1)
+    $progressBar = "=" * [math]::Floor($percentOverall / 5)
+    $spaces = " " * (20 - $progressBar.Length)
+
+    Write-Host ""
+    Write-Host "╔═══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║  Item $CurrentItem of $TotalItems - Overall Progress: $percentOverall%".PadRight(79) + "║" -ForegroundColor Cyan
+    Write-Host "║  [$progressBar$spaces]".PadRight(79) + "║" -ForegroundColor Yellow
+    Write-Host "╠═══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
+    Write-Host "║  Source: $SourcePath".PadRight(79).Substring(0,79) + "║" -ForegroundColor White
+    Write-Host "║  Destination: $DestinationPath".PadRight(79).Substring(0,79) + "║" -ForegroundColor White
+    Write-Host "╚═══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host ""
+}
+
 function Invoke-RobocopyBackup {
     param(
         [Parameter(Mandatory = $true)]
@@ -885,8 +1267,15 @@ function Invoke-RobocopyBackup {
 
         [ValidateRange(1,600)]
         [int]
-        $RetryDelaySeconds = 5
+        $RetryDelaySeconds = 5,
+
+        [int]$CurrentItem = 1,
+
+        [int]$TotalItems = 1
     )
+
+    # Show progress indicator
+    Show-RobocopyProgress -SourcePath $Item.Source -DestinationPath $Item.Target -CurrentItem $CurrentItem -TotalItems $TotalItems
 
     if (-not (Test-Path -LiteralPath $Item.Target)) {
         New-Item -ItemType Directory -Path $Item.Target -Force | Out-Null
@@ -914,7 +1303,7 @@ function Invoke-RobocopyBackup {
         $arguments += "/LOG+:$LogFile"
     }
 
-    Write-Host "Backing up '$($Item.Source)' to '$($Item.Target)'" -ForegroundColor Cyan
+    Write-Host "Starting Robocopy operation..." -ForegroundColor Cyan
     $command = "robocopy $($arguments -join ' ')"
     Write-Verbose "Executing: $command"
 
@@ -971,6 +1360,57 @@ function Invoke-RobocopyBackup {
 $osInfo = Get-OsVersionInfo
 if (-not (Test-IsSupportedWindows -OsInfo $osInfo)) {
     throw 'This script is intended for Windows 10 or Windows 11 systems.'
+}
+
+# Detect if we should run in interactive mode
+$isInteractive = (-not $NonInteractive.IsPresent) -and ([string]::IsNullOrWhiteSpace($DestinationPath))
+
+if ($isInteractive) {
+    Write-Host ""
+    Write-Host "╔═══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-Host "║                              Interactive Backup Mode                          ║" -ForegroundColor Cyan
+    Write-Host "╚═══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Welcome to the x0dus interactive backup wizard!" -ForegroundColor Yellow
+    Write-Host "This wizard will guide you through configuring your backup." -ForegroundColor White
+    Write-Host ""
+
+    $options = @(
+        "Quick Backup - Minimal configuration (current user profile to local path)",
+        "Custom Backup - Full configuration (all options, network shares, additional folders)"
+    )
+
+    $modeChoice = Show-Menu -Title "Select Backup Mode" -Options $options -DefaultChoice 1
+    $quickMode = ($modeChoice -eq 1)
+
+    $interactiveConfig = Get-InteractiveConfiguration -QuickMode $quickMode
+
+    # Apply interactive configuration to script variables
+    $DestinationPath = $interactiveConfig.DestinationPath
+    $NetworkShare = $interactiveConfig.NetworkShare
+    $NetworkProtocol = $interactiveConfig.NetworkProtocol
+    $NetworkCredential = $interactiveConfig.NetworkCredential
+    $NetworkDriveLetter = $interactiveConfig.NetworkDriveLetter
+
+    if ($interactiveConfig.IncludeAllUsers) {
+        $IncludeAllUsers = $true
+    }
+    if ($interactiveConfig.IncludePublicProfile) {
+        $IncludePublicProfile = $true
+    }
+    if ($interactiveConfig.SkipDefaultDirectories) {
+        $SkipDefaultDirectories = $true
+    }
+
+    $AdditionalPaths = $interactiveConfig.AdditionalPaths
+    $RobocopyThreads = $interactiveConfig.Threads
+    $RobocopyRetries = $interactiveConfig.Retries
+    $RobocopyRetryDelaySeconds = $interactiveConfig.RetryDelaySeconds
+}
+
+# Validate that DestinationPath is set (either via parameter or interactive mode)
+if ([string]::IsNullOrWhiteSpace($DestinationPath)) {
+    throw "DestinationPath is required. Run the script without parameters for interactive mode, or provide -DestinationPath."
 }
 
 $networkContext = $null
@@ -1038,8 +1478,10 @@ try {
     }
 
     Write-Host "Starting backup of $($backupItems.Count) item(s)..." -ForegroundColor Magenta
+    $itemIndex = 0
     foreach ($item in $backupItems) {
-        Invoke-RobocopyBackup -Item $item -LogFile $logFile -IsDryRun:$DryRun
+        $itemIndex++
+        Invoke-RobocopyBackup -Item $item -LogFile $logFile -IsDryRun:$DryRun -Threads $RobocopyThreads -Retries $RobocopyRetries -RetryDelaySeconds $RobocopyRetryDelaySeconds -CurrentItem $itemIndex -TotalItems $backupItems.Count
     }
 
     Write-Host 'Backup completed successfully.' -ForegroundColor Green

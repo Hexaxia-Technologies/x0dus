@@ -122,6 +122,31 @@ git pull
 
 ### Windows backup script
 
+The backup script can run in two modes:
+
+#### Interactive Mode (Default)
+
+Run the script without any parameters to launch the interactive wizard:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\backup.ps1
+```
+
+The wizard will guide you through:
+1. **Mode Selection**: Choose between Quick Backup or Custom Backup
+   - **Quick Backup**: Minimal configuration - backs up current user profile to a local path
+   - **Custom Backup**: Full control over all options including network shares, multiple user profiles, additional folders, and Robocopy tuning
+2. **Destination Selection**: Choose local path or network share (SMB/NFS)
+3. **User Profile Selection**: Current user, all users, or all users + Public folder
+4. **Additional Folders**: Add extra directories to backup (one at a time)
+5. **Advanced Options**: Configure Robocopy threading, retries, and delays (Custom mode only)
+6. **Confirmation**: Review your configuration before starting
+
+#### Command-Line Mode
+
+You can also run the script with command-line parameters for automation or scripting:
+
 1. Decide where the backup should be stored (for example an external drive,
    secondary internal disk, or network share) and create the destination
    folder if needed.
@@ -140,6 +165,8 @@ git pull
 
 ### Optional parameters
 
+- `-NonInteractive` – disable interactive mode even when no destination is provided.
+  Useful for automation scenarios where you want the script to fail rather than prompt.
 - `-AdditionalPaths <string[]>` – include extra folders in the backup (for
   example project directories stored outside the user profile). Drive roots are
   supported and saved with a friendly name.
@@ -218,13 +245,21 @@ $credential = Get-Credential
 
 ```powershell
 .\backup.ps1 -DestinationPath "E:\UserBackup" -DryRun
+```
 
 ### Example: non-interactive creation of the destination
 
 ```powershell
 .\backup.ps1 -DestinationPath "E:\UserBackup" -ForceCreateDestination -DryRun
 ```
-```
+
+### Progress Visualization
+
+The script now includes visual progress indicators during backup operations:
+- Shows current item number and total items being backed up
+- Displays overall progress percentage with a progress bar
+- Shows source and destination paths for each item
+- Provides clear visual feedback throughout the backup process
 
 ## What gets backed up?
 
