@@ -162,6 +162,46 @@ The backup script recently added several new parameters:
 - Separate from Robocopy log (`logs/backup-*.log`)
 - Both logs saved in destination's `logs/` directory
 
+### Backup Pre-flight Checks
+
+Before starting the backup, the script performs comprehensive validation:
+
+**Size Estimation Phase:**
+1. Visual header: "BACKUP SIZE ESTIMATION"
+2. Calculates total size of all backup items
+3. Shows "Size estimation completed!" when done
+4. Displays warnings for any files/folders that couldn't be scanned
+
+**Space Availability Check:**
+1. Visual header: "SPACE AVAILABILITY CHECK"
+2. Displays three key metrics:
+   - Estimated backup size
+   - Available space at destination
+   - Space utilization percentage (color-coded)
+3. Color-coded utilization warnings:
+   - Green (<50%): Good
+   - Yellow (50-80%): Moderate
+   - Yellow (80-90%): Caution - Limited space
+   - Red (90-100%): WARNING - Very tight!
+   - Red (>100%): INSUFFICIENT SPACE!
+
+**Space Validation:**
+- If backup size > available space:
+  - Shows "INSUFFICIENT SPACE" error banner
+  - Displays shortfall amount
+  - Lists options (free space, different destination, reduce scope)
+  - Throws error and stops
+- If space utilization > 80%:
+  - Shows warning about tight space
+  - Explains Robocopy may need temporary space
+  - **Prompts user for go/no-go decision**
+  - User can proceed (Y) or cancel (N)
+
+**Ready to Begin:**
+- Visual header: "READY TO BEGIN BACKUP"
+- Summary of backup items, total size, mode (dry run if applicable)
+- Backup only starts after all checks pass and user confirmation (if needed)
+
 ### Robocopy Retry Logic
 
 `Invoke-RobocopyBackup` now implements exponential backoff retry logic:

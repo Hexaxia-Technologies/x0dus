@@ -1688,27 +1688,119 @@ try {
         }
     }
 
-    Write-Host 'Estimating backup size...' -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "+===============================================================================+" -ForegroundColor Cyan
+    Write-Host "|                         BACKUP SIZE ESTIMATION                                |" -ForegroundColor Cyan
+    Write-Host "+===============================================================================+" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Analyzing source directories and calculating total size..." -ForegroundColor Yellow
+    Write-Host "This may take several minutes for large directories." -ForegroundColor Gray
+    Write-Host ""
+
     $sizeEstimate = Get-BackupSizeEstimate -Items $backupItems
     $totalBytes = [int64]$sizeEstimate.TotalSizeBytes
 
+    Write-Host "Size estimation completed!" -ForegroundColor Green
+    Write-Host ""
+
     if ($sizeEstimate.HadErrors) {
+        Write-Host "WARNINGS DURING SIZE ESTIMATION:" -ForegroundColor Yellow
         foreach ($detail in $sizeEstimate.Details) {
             if ($detail.HadErrors) {
                 Write-Warning "Some contents under '$($detail.Path)' could not be scanned: $($detail.ErrorMessages -join '; ')"
             }
         }
         Write-Warning 'The size estimate excludes items that could not be scanned due to access restrictions. Ensure additional free space is available or rerun with elevated permissions.'
+        Write-Host ""
     }
 
-    Write-Host "Estimated data to copy: $(Format-ByteSize -Bytes $totalBytes)" -ForegroundColor Yellow
+    Write-Host "+===============================================================================+" -ForegroundColor Cyan
+    Write-Host "|                         SPACE AVAILABILITY CHECK                              |" -ForegroundColor Cyan
+    Write-Host "+===============================================================================+" -ForegroundColor Cyan
+    Write-Host ""
 
     $availableBytes = Get-DestinationFreeSpace -Path $destination
-    Write-Host "Available space at destination: $(Format-ByteSize -Bytes $availableBytes)" -ForegroundColor Yellow
-
-    if ($totalBytes -gt $availableBytes) {
-        throw "Estimated backup size ($(Format-ByteSize -Bytes $totalBytes)) exceeds available space ($(Format-ByteSize -Bytes $availableBytes)). Free up space or choose a different destination."
+    $spaceUtilizationPercent = 0
+    if ($availableBytes -gt 0) {
+        $spaceUtilizationPercent = [math]::Round(($totalBytes / $availableBytes) * 100, 1)
     }
+
+    Write-Host "Estimated backup size: " -NoNewline -ForegroundColor White
+    Write-Host "$(Format-ByteSize -Bytes $totalBytes)" -ForegroundColor Cyan
+    Write-Host "Available space:       " -NoNewline -ForegroundColor White
+    Write-Host "$(Format-ByteSize -Bytes $availableBytes)" -ForegroundColor Cyan
+    Write-Host "Space utilization:     " -NoNewline -ForegroundColor White
+
+    # Color-code space utilization
+    if ($spaceUtilizationPercent -gt 100) {
+        Write-Host "$spaceUtilizationPercent% " -NoNewline -ForegroundColor Red
+        Write-Host "(INSUFFICIENT SPACE!)" -ForegroundColor Red
+    }
+    elseif ($spaceUtilizationPercent -gt 90) {
+        Write-Host "$spaceUtilizationPercent% " -NoNewline -ForegroundColor Red
+        Write-Host "(WARNING: Very tight!)" -ForegroundColor Yellow
+    }
+    elseif ($spaceUtilizationPercent -gt 80) {
+        Write-Host "$spaceUtilizationPercent% " -NoNewline -ForegroundColor Yellow
+        Write-Host "(Caution: Limited space)" -ForegroundColor Yellow
+    }
+    elseif ($spaceUtilizationPercent -gt 50) {
+        Write-Host "$spaceUtilizationPercent%" -ForegroundColor Yellow
+    }
+    else {
+        Write-Host "$spaceUtilizationPercent% " -NoNewline -ForegroundColor Green
+        Write-Host "(Good)" -ForegroundColor Green
+    }
+
+    Write-Host ""
+
+    # Handle insufficient space
+    if ($totalBytes -gt $availableBytes) {
+        Write-Host "+===============================================================================+" -ForegroundColor Red
+        Write-Host "|                           INSUFFICIENT SPACE                                  |" -ForegroundColor Red
+        Write-Host "+===============================================================================+" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "ERROR: The estimated backup size exceeds available destination space!" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "Shortfall: " -NoNewline -ForegroundColor White
+        Write-Host "$(Format-ByteSize -Bytes ($totalBytes - $availableBytes))" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "Options:" -ForegroundColor Yellow
+        Write-Host "  1. Free up space at the destination" -ForegroundColor White
+        Write-Host "  2. Choose a different destination" -ForegroundColor White
+        Write-Host "  3. Reduce backup scope (exclude users, skip AppData, etc.)" -ForegroundColor White
+        Write-Host ""
+        throw "Backup cannot proceed: Insufficient space at destination."
+    }
+
+    # Warn if space is tight (>80% utilization) and ask for confirmation
+    if ($spaceUtilizationPercent -gt 80) {
+        Write-Host "WARNING: Backup will use more than 80% of available space!" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "Robocopy may require additional temporary space during operation." -ForegroundColor Yellow
+        Write-Host "Consider having at least 10-20% free space buffer for safety." -ForegroundColor Yellow
+        Write-Host ""
+
+        $proceed = Read-Host "Do you want to proceed anyway? (Y/N) [default: N]"
+        if ($proceed -notmatch '^[Yy]') {
+            throw "Backup cancelled by user due to space concerns."
+        }
+        Write-Host ""
+    }
+
+    Write-Host "+===============================================================================+" -ForegroundColor Green
+    Write-Host "|                         READY TO BEGIN BACKUP                                 |" -ForegroundColor Green
+    Write-Host "+===============================================================================+" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "Backup items: " -NoNewline -ForegroundColor White
+    Write-Host "$($backupItems.Count)" -ForegroundColor Cyan
+    Write-Host "Total size:   " -NoNewline -ForegroundColor White
+    Write-Host "$(Format-ByteSize -Bytes $totalBytes)" -ForegroundColor Cyan
+    if ($DryRun) {
+        Write-Host "Mode:         " -NoNewline -ForegroundColor White
+        Write-Host "DRY RUN (preview only, no files will be copied)" -ForegroundColor Yellow
+    }
+    Write-Host ""
 
     Write-Host "Starting backup of $($backupItems.Count) item(s)..." -ForegroundColor Magenta
     $itemIndex = 0
