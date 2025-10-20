@@ -96,9 +96,18 @@ The interactive backup wizard now offers 4 modes with detailed explanations:
 3. **Full User Profile** - Everything including all AppData (largest, with warnings)
 4. **Custom Backup** - Full control including AppData mode selection
 
-Each mode displays estimated size ranges and use cases to help users make informed decisions.
+Each mode displays estimated size ranges (per user) and use cases to help users make informed decisions.
 
-After confirming configuration, users are prompted for **Dry Run mode** - a preview-only mode that lists what would be backed up without actually copying files. This is useful for verifying the configuration before committing to a potentially long backup operation.
+**All modes prompt for:**
+- User profile selection (current user, all users, all users + Public, or skip profiles)
+- Destination path (local or network share for Custom mode)
+- Dry run option (preview-only mode without copying files)
+
+**Custom mode additionally prompts for:**
+- Network share configuration (SMB/NFS)
+- Additional folders to backup
+- AppData handling mode (override the default Full mode)
+- Advanced Robocopy tuning options
 
 ### New PowerShell Parameters (Recent Changes)
 
@@ -107,15 +116,18 @@ The backup script recently added several new parameters:
 **Interactive mode** (NEW):
 - `-NonInteractive` - Disables interactive mode when DestinationPath is not provided
 - **Default behavior**: When `DestinationPath` is not provided and `NonInteractive` is not set, the script launches an interactive wizard
-- **Interactive wizard features**:
+- **Interactive wizard features** (all modes):
   - Mode selection: Essential Files Only, Essential + Settings (recommended), Full Profile, or Custom Backup
-  - AppData handling: Automatic based on mode, or manual selection in Custom mode
-  - Destination selection: Local path or network share (SMB/NFS)
-  - User profile selection: Current user, all users, or all users + Public folder
-  - Additional folders: Text entry for multiple paths
-  - Robocopy tuning: Thread count, retries, retry delay (Custom mode only)
+  - AppData handling: Automatic based on mode (EssentialFoldersOnly, RoamingOnly, or Full)
+  - User profile selection: Current user, all users, all users + Public folder, or skip profiles
+  - Destination selection: Local path (all modes), network share (Custom mode only)
   - Configuration confirmation with summary (including AppData mode)
   - Dry Run option: Preview backup without copying files
+- **Custom mode additional features**:
+  - Network share configuration: SMB/NFS with credentials
+  - Additional folders: Text entry for multiple paths beyond user profiles
+  - AppData handling override: Manual selection to override default Full mode
+  - Robocopy tuning: Thread count, retries, retry delay
 
 **Interactive mode functions**:
 - `Get-InteractiveConfiguration` - Main interactive wizard orchestrator

@@ -833,16 +833,9 @@ function Get-InteractiveConfiguration {
     $destConfig = Get-DestinationPathInteractive -AllowNetworkShare:(-not $QuickMode)
     $config += $destConfig
 
-    # User profiles
-    if ($QuickMode) {
-        $config.IncludeAllUsers = $false
-        $config.IncludePublicProfile = $false
-        $config.SkipDefaultDirectories = $false
-    }
-    else {
-        $profileConfig = Get-UserProfileSelectionInteractive
-        $config += $profileConfig
-    }
+    # User profiles - ask for all modes
+    $profileConfig = Get-UserProfileSelectionInteractive
+    $config += $profileConfig
 
     # Additional paths
     if (-not $QuickMode) {
@@ -1562,25 +1555,25 @@ if ($isInteractive) {
     Write-Host "[1] Essential Files Only" -ForegroundColor Green
     Write-Host "    - Backs up: Documents, Desktop, Pictures, Videos, Music, Downloads" -ForegroundColor White
     Write-Host "    - Skips: All AppData (no application settings or caches)" -ForegroundColor Gray
-    Write-Host "    - Size: Smallest (typically 5-50 GB)" -ForegroundColor White
+    Write-Host "    - Size: Smallest (typically 5-50 GB per user)" -ForegroundColor White
     Write-Host "    - Best for: Fresh Linux start, you'll reconfigure applications" -ForegroundColor White
     Write-Host ""
     Write-Host "[2] Essential + Settings (Recommended)" -ForegroundColor Green
     Write-Host "    - Backs up: Essential files + AppData\Roaming" -ForegroundColor White
     Write-Host "    - Includes: App settings, game saves, browser bookmarks/passwords" -ForegroundColor White
     Write-Host "    - Skips: AppData\Local (caches, temp files, shader caches)" -ForegroundColor Gray
-    Write-Host "    - Size: Medium (typically 10-80 GB)" -ForegroundColor White
+    Write-Host "    - Size: Medium (typically 10-80 GB per user)" -ForegroundColor White
     Write-Host "    - Best for: Preserve settings without bloat" -ForegroundColor White
     Write-Host ""
     Write-Host "[3] Full User Profile" -ForegroundColor Green
-    Write-Host "    - Backs up: Everything in your user folder" -ForegroundColor White
+    Write-Host "    - Backs up: Everything in user folder(s)" -ForegroundColor White
     Write-Host "    - Includes: ALL AppData (Roaming + Local + LocalLow)" -ForegroundColor White
     Write-Host "    - Warning: AppData\Local can be 10GB+ with browser/Steam caches!" -ForegroundColor Yellow
-    Write-Host "    - Size: Largest (can exceed 100+ GB)" -ForegroundColor White
+    Write-Host "    - Size: Largest (can exceed 100+ GB per user)" -ForegroundColor White
     Write-Host "    - Best for: Maximum preservation, forensics, unsure what you need" -ForegroundColor White
     Write-Host ""
     Write-Host "[4] Custom Backup" -ForegroundColor Green
-    Write-Host "    - Full control: Choose users, folders, network shares, AppData handling" -ForegroundColor White
+    Write-Host "    - Full control: Additional folders, network shares, custom AppData handling" -ForegroundColor White
     Write-Host "    - Best for: Advanced users with specific requirements" -ForegroundColor White
     Write-Host ""
     Write-Host "Note: AppData\Roaming stores app settings/saves (~1-10 GB)" -ForegroundColor Cyan
@@ -1596,6 +1589,10 @@ if ($isInteractive) {
 
     $modeChoice = Show-Menu -Title "Select Backup Mode" -Options $options -DefaultChoice 2
     $quickMode = ($modeChoice -le 3)
+
+    Write-Host ""
+    Write-Host "Note: You will be asked which user profiles to backup in the next step." -ForegroundColor Cyan
+    Write-Host ""
 
     # Map mode choice to AppDataMode
     switch ($modeChoice) {
