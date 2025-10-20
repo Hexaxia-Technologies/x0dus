@@ -190,6 +190,9 @@ param(
     [string]$AppDataMode = 'Full'
 )
 
+# Script version
+$scriptVersion = "1.0.0"
+
 # Display banner
 $banner = @"
 
@@ -226,7 +229,7 @@ $banner = @"
                           ========
                              ==
 
-                  x0dus Migration Toolkit
+              x0dus Migration Toolkit v$scriptVersion
         Windows to Linux Migration - Data Backup and
                     Restore Utility
 

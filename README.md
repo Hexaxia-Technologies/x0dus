@@ -1,15 +1,18 @@
 # x0dus
 
+**Version:** 1.0.0
+
 Windows and Linux helper scripts to migrate to Linux.
 
 ## Overview
 
 The repository provides four companion scripts:
 
-- A PowerShell helper (`backup.ps1`) that copies the entire user profile on
-  Windows 10 and Windows 11 machines to a safe location before replacing the
-  operating system with Linux. The script also collects an inventory of
-  installed software to help with post-migration setup.
+- A PowerShell helper (`backup.ps1`) that copies user profiles on Windows 10
+  and Windows 11 machines to a safe location before replacing the operating
+  system with Linux. Features include granular AppData filtering (to reduce
+  backup size), hardware inventory collection (for Linux driver compatibility),
+  and installed software inventory to help with post-migration setup.
 - A Bash helper (`linux-restore-helper.sh`) that runs on Linux after the
   migration, summarizes distro details, and guides you through locating and
   mounting the backup drive so you can restore files.
@@ -198,6 +201,14 @@ You can also run the script with command-line parameters for automation or scrip
   directory without prompting. By default the script asks interactively before
   creating a missing destination to avoid accidental disk changes when run
   manually.
+- `-AppDataMode <Full|RoamingOnly|None|EssentialFoldersOnly>` – controls how
+  AppData folders are handled during backup (default: `Full`):
+  - `Full` – includes all AppData (Roaming, Local, LocalLow)
+  - `RoamingOnly` – includes only AppData\Roaming (settings/saves), excludes
+    Local and LocalLow (caches). Can save 10-50+ GB.
+  - `None` – excludes all AppData folders from the backup
+  - `EssentialFoldersOnly` – skips the entire user profile, backs up only essential
+    folders (Documents, Desktop, Pictures, Videos, Music, Downloads, Favorites)
 
 ### Robocopy tuning and retries
 
@@ -273,9 +284,14 @@ directories can be added with `-AdditionalPaths`.
 The data is copied with Robocopy using options that preserve file attributes
 and timestamps while skipping junction loops. A timestamped Robocopy log file is
 stored in `logs\` inside the destination folder (unless logging is disabled).
-When the backup completes, the script exports an `installed-software.csv` file
-containing the Display Name, Version, Publisher, Install Date, and Install
-Location reported by Windows for each detected program.
+
+When the backup completes, the script exports two inventory files:
+- `installed-software.csv` – containing the Display Name, Version, Publisher,
+  Install Date, and Install Location reported by Windows for each detected program.
+- `hardware-inventory.csv` – comprehensive hardware information including CPU, GPU,
+  network adapters, motherboard, BIOS, RAM, storage, and USB controllers. This is
+  especially useful for identifying WiFi chipsets, graphics cards, and other hardware
+  that may require specific Linux drivers.
 
 ### Linux restore helper
 

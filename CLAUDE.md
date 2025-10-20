@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Version and Status
+
+**Current Version:** 1.0.0
+
+**Status:** Production-ready
+
+The x0dus migration toolkit is feature-complete for v1.0 and ready for real-world use. The core backup functionality is robust, user-friendly, and addresses the primary use case of backing up Windows user data before Linux migration.
+
 ## Project Overview
 
 x0dus is a Windows-to-Linux migration toolkit consisting of four companion scripts:
@@ -405,3 +413,129 @@ Both PowerShell and Bash helpers support SMB and NFS:
 - Helpers can run in any order, but data restore needs mount point established first
 - Desktop restore skips `.lnk` files but preserves all other file types
 - Python 3 is required for CSV parsing in software inventory helper; gracefully degrades if missing
+
+## Potential Future Enhancements
+
+The following features have been considered for future versions but are not currently implemented. These represent potential v2.0+ enhancements based on user feedback and use cases:
+
+### Backup Features
+
+**1. Resume Capability (High Priority)**
+- Allow resuming failed backups from the point of failure instead of restarting
+- Robocopy supports this natively with `/MIR` or `/DCOPY:T` flags
+- Would save significant time on large backups that fail near completion
+- Estimated implementation effort: Medium
+- User benefit: High (especially for slow/unreliable connections)
+
+**2. Incremental/Differential Backup Support**
+- Support for incremental backups (only changed files since last backup)
+- Differential backups (all changes since full backup)
+- Would reduce backup time and storage requirements for repeated backups
+- Requires backup metadata/tracking system
+- Estimated implementation effort: High
+- User benefit: Medium-High (useful for ongoing backups, less critical for one-time migrations)
+
+**3. Backup Verification**
+- Hash-based verification of copied files (MD5/SHA256)
+- Ensures data integrity after transfer
+- Option to verify during or after backup
+- Performance impact: Significant (hashing is CPU/IO intensive)
+- Estimated implementation effort: Medium
+- User benefit: Medium (peace of mind, but Robocopy is already reliable)
+
+**4. Compression Support**
+- Optional compression using 7z/zip
+- Could significantly reduce backup size and transfer time
+- Trade-off: CPU usage vs storage/network savings
+- Estimated implementation effort: Medium-High
+- User benefit: Medium (helpful for network transfers, less for local drives)
+
+### Script Organization
+
+**5. Modularization**
+- Split large backup.ps1 (~2000 lines) into multiple files
+- Use dot-sourcing to import helper modules
+- Modules: Interactive functions, hardware inventory, network operations, etc.
+- Estimated implementation effort: Medium
+- User benefit: Low (developer quality-of-life, easier maintenance)
+
+**6. Configuration File Support**
+- Support for .conf or .json configuration files
+- Pre-define backup sets for repeated operations
+- Useful for IT administrators managing multiple migrations
+- Estimated implementation effort: Low-Medium
+- User benefit: Low-Medium (nice-to-have for advanced users)
+
+### Advanced Features
+
+**7. Scheduled Backups**
+- Windows Task Scheduler integration
+- Automated recurring backups
+- Less relevant for one-time migration use case
+- Estimated implementation effort: Low
+- User benefit: Low (outside primary use case)
+
+**8. Email/Notifications**
+- Email or SMS notifications on backup completion/failure
+- Useful for unattended backups
+- Requires SMTP configuration or notification service
+- Estimated implementation effort: Medium
+- User benefit: Low-Medium (nice-to-have for automated scenarios)
+
+**9. Encryption Support**
+- Encrypt backup data at rest
+- Useful for sensitive data or cloud storage destinations
+- Could use 7z with password or VeraCrypt integration
+- Estimated implementation effort: High
+- User benefit: Medium (security-conscious users)
+
+**10. Bandwidth Throttling**
+- Limit network bandwidth for remote backups
+- Prevent saturating network connection
+- Robocopy supports `/IPG` flag for inter-packet gap
+- Estimated implementation effort: Low
+- User benefit: Low-Medium (useful for network backups)
+
+**11. Custom Exclude Patterns**
+- User-defined file/folder exclusion patterns
+- Regex or glob-based filtering
+- More granular control than current AppData modes
+- Estimated implementation effort: Medium
+- User benefit: Medium (power users)
+
+### UX Improvements
+
+**12. Dry Run Visibility Enhancements**
+- Show example Robocopy command that would execute
+- More detailed preview of what will be copied
+- Estimated implementation effort: Low
+- User benefit: Low-Medium (helpful for advanced users)
+
+**13. Progress Estimation**
+- Real-time progress percentage based on file count/size
+- ETA for backup completion
+- Requires Robocopy output parsing
+- Estimated implementation effort: Medium
+- User benefit: Medium (nice-to-have UX improvement)
+
+## Development Priorities
+
+If implementing future enhancements, recommended priority order:
+1. **Resume capability** - Highest user value for large backups
+2. **Backup verification** - Important for data integrity confidence
+3. **Incremental backups** - Useful if tool evolves beyond one-time migrations
+4. **Compression** - Depends on user feedback about backup sizes
+5. **Encryption** - Security-focused enhancement
+6. Lower priority: Modularization, scheduling, notifications, etc.
+
+## Version History
+
+- **v1.0.0** (2025-10-20) - Initial production release
+  - Interactive wizard with 4 backup modes
+  - Granular AppData filtering (Full, RoamingOnly, None, EssentialFoldersOnly)
+  - Hardware inventory export for Linux driver compatibility
+  - Software inventory export
+  - Pre-flight space checks with go/no-go prompts
+  - Comprehensive error handling and retry logic
+  - Network share support (SMB/NFS)
+  - Professional branding with disclaimer
