@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.0.RC1] - 2025-01-22
+No unreleased changes. See [GitHub Issues](https://github.com/Hexaxia-Technologies/x0dus/issues) for planned enhancements.
+
+## [1.0.0.RC1] - 2025-10-22
+
+**Note:** This is a maintenance release containing critical bug fixes discovered shortly after the v1.0.0 release. RC1 designation indicates thorough testing is recommended before production use.
 
 ### Added
 

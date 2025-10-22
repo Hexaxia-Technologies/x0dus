@@ -1,8 +1,14 @@
 # x0dus
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Version](https://img.shields.io/badge/version-1.0.0.RC1-blue.svg)](https://github.com/Hexaxia-Technologies/x0dus/releases)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
+
 **Version:** 1.0.0.RC1
 
 Windows and Linux helper scripts to migrate to Linux.
+
+**Organization:** [Hexaxia Technologies](https://hexaxia.tech) | **GitHub:** [Hexaxia-Technologies](https://github.com/Hexaxia-Technologies)
 
 ## Overview
 
@@ -35,6 +41,57 @@ All Linux helpers record their activity under `~/x0dus`, a workspace folder
 in the current user's home directory that keeps logs, detected system details,
 hardware/software reports, and handy path references so you can resume the
 migration at any point.
+
+## Quick Start
+
+**On Windows (before migrating to Linux):**
+
+```powershell
+# Download backup.ps1, then run:
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\backup.ps1
+# Follow the interactive wizard to backup your data
+```
+
+**On Linux (after migrating):**
+
+```bash
+# Clone the repository
+git clone https://github.com/Hexaxia-Technologies/x0dus.git
+cd x0dus
+
+# Make scripts executable
+chmod +x *.sh
+
+# Start the migration process
+./linux-restore-helper.sh
+# Follow the prompts to mount your backup and restore data
+```
+
+For detailed usage instructions, configuration options, and troubleshooting, see the sections below.
+
+## Recommended Workflow
+
+The typical migration process follows these steps:
+
+1. **On Windows (Before Migration):**
+   - Run `backup.ps1` to create a full backup of your user profile(s)
+   - Save to an external drive or network location
+   - Review the hardware and software inventory files created in the backup
+
+2. **Install Linux:**
+   - Boot from Linux installation media
+   - Install your chosen Linux distribution
+   - Create your user account
+
+3. **On Linux (After Migration):**
+   - Run `linux-restore-helper.sh` to locate and mount your backup drive
+   - Run `linux-data-restore.sh` to copy your Windows files to Linux
+   - Run `linux-software-inventory.sh` to see what software to reinstall
+   - Run `linux-hardware-helper.sh` to check hardware compatibility
+   - Run `linux-ai-prompt-generator.sh` for personalized AI assistance
+
+Each helper remembers your choices in `~/x0dus/`, so you can run them in any order or resume if interrupted.
 
 ## Requirements
 
@@ -170,6 +227,7 @@ You can also run the script with command-line parameters for automation or scrip
 
    ```powershell
    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+   # Note: Replace "E:\UserBackup" with your actual destination path
    .\backup.ps1 -DestinationPath "E:\UserBackup"
    ```
 
@@ -539,6 +597,12 @@ based on your migration context.
    Gemini, or any other AI chatbot for personalized assistance.
 
 ## Troubleshooting
+
+**Quick Links:**
+- [Windows Backup Issues](#windows-backup-issues)
+- [Linux Restore Issues](#linux-restore-issues)
+  - [NTFS Drive Issues](#ntfs-drive-issues-windows-backup-drives) ← Comprehensive NTFS guide
+- [Script Execution Issues](#script-execution-issues)
 
 ### Windows Backup Issues
 
@@ -1037,13 +1101,3 @@ sudo blkid
 - To redo data restore: Delete copied files from home directory first
 - Workspace files are just text files - you can edit them manually if needed: `nano ~/x0dus/mount-point.txt`
 
-### Recommended workflow
-
-For the smoothest migration experience, run the helpers in this order:
-
-1. **On Windows:** Run `backup.ps1` to create the backup with hardware and software inventories
-2. **On Linux:** Run `linux-restore-helper.sh` to mount the backup drive
-3. **On Linux:** Run `linux-data-restore.sh` to copy your Windows profile
-4. **On Linux:** Run `linux-hardware-helper.sh` to check hardware compatibility
-5. **On Linux:** Run `linux-software-inventory.sh` to see software alternatives
-6. **On Linux:** Run `linux-ai-prompt-generator.sh` to generate AI assistance prompts

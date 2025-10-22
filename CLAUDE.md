@@ -794,13 +794,14 @@ If implementing future enhancements, recommended priority order:
 
 ## Version History
 
-- **v1.0.0.RC1** (2025-01-22) - Release Candidate 1
+- **v1.0.0.RC1** (2025-10-22) - Maintenance Release (Post-v1.0.0 Hotfix)
   - Added comprehensive robocopy error handling
   - Failed files logging feature
   - Script continues on file copy errors instead of quitting
   - Backup completion summary with failed files report
   - Exit codes 4-7 handled as warnings (backup continues)
   - Exit codes 8+ continue with next item instead of terminating
+  - Note: Critical bug fixes for issues discovered shortly after v1.0.0 release
 
 - **v1.0.0** (2025-10-20) - Initial production release
 
