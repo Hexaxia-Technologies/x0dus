@@ -68,7 +68,7 @@ No unreleased changes. See [GitHub Issues](https://github.com/Hexaxia-Technologi
 
 ### Documentation
 - Comprehensive README.md with 11+ usage examples
-- Developer guide (CLAUDE.md) with architecture, testing, and implementation patterns
+- Contributing guidelines (CONTRIBUTING.md) with code style and PR requirements
 - MIT License
 - Professional disclaimers in all script banners
 
