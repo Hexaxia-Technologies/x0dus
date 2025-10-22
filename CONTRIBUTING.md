@@ -37,7 +37,6 @@ We welcome pull requests! Before submitting substantial changes:
 
 - [ ] Test your changes on the target platform (Windows for PowerShell, Linux for Bash)
 - [ ] Update README.md if adding features or changing usage
-- [ ] Update CLAUDE.md if changing architecture or adding new functions
 - [ ] Update CHANGELOG.md under the `[Unreleased]` section
 - [ ] Follow existing code style (see below)
 - [ ] Ensure all scripts remain compatible with stated requirements
@@ -108,8 +107,7 @@ detect_distro() {
 - Update version in **all** relevant files when bumping versions:
   - `backup.ps1`: `$scriptVersion`
   - All `.sh` files: `SCRIPT_VERSION`
-  - `README.md`: `**Version:**` line
-  - `CLAUDE.md`: Version history section
+  - `README.md`: `**Version:**` line and badges
   - `CHANGELOG.md`: Add new version section
 
 ### Documentation Style
@@ -173,7 +171,6 @@ x0dus/
 ├── linux-hardware-helper.sh        # Hardware compatibility
 ├── linux-ai-prompt-generator.sh    # AI prompt generator
 ├── README.md                       # User documentation
-├── CLAUDE.md                       # Developer documentation
 ├── CHANGELOG.md                    # Version history
 ├── CONTRIBUTING.md                 # This file
 ├── LICENSE                         # MIT License
