@@ -689,10 +689,262 @@ based on your migration context.
 **Solutions:**
 - Mount the drive with sudo: The Linux helpers will prompt for sudo when needed
 - Check mount permissions: `ls -la /mnt/backup`
-- For NTFS drives, install NTFS support:
-  - **Debian/Ubuntu:** `sudo apt install ntfs-3g`
-  - **Fedora:** `sudo dnf install ntfs-3g`
 - For network shares, verify credentials and permissions on the source
+- For NTFS drives, see comprehensive NTFS troubleshooting below
+
+#### NTFS Drive Issues (Windows Backup Drives)
+
+Since Windows uses NTFS for its filesystems, backup drives are typically NTFS-formatted. Linux can read and write NTFS, but requires proper tools and configuration.
+
+##### Installing NTFS Support
+
+**Install required packages:**
+
+```bash
+# Debian/Ubuntu/Linux Mint
+sudo apt update
+sudo apt install ntfs-3g ntfsprogs
+
+# Fedora/RHEL/CentOS
+sudo dnf install ntfs-3g ntfsprogs
+
+# Arch Linux
+sudo pacman -S ntfs-3g
+
+# openSUSE
+sudo zypper install ntfs-3g ntfsprogs
+```
+
+**What these packages provide:**
+- `ntfs-3g`: Full read/write NTFS support via FUSE
+- `ntfsprogs`: NTFS utilities including `ntfsfix`, `ntfsinfo`, `ntfsclone`
+
+##### Read-Only Mount Issues
+
+**Symptoms:** NTFS drive mounts as read-only, cannot write files.
+
+**Common Causes:**
+
+1. **Windows Fast Startup / Hibernation (Most Common)**
+   - Windows didn't fully shut down, left filesystem in "dirty" state
+   - Metadata kept in Windows cache, preventing Linux writes
+
+2. **Filesystem Errors**
+   - Drive has errors that need repair
+   - Improper disconnection or power loss
+
+3. **NTFS Journal Issues**
+   - NTFS transaction log has pending operations
+
+**Solutions:**
+
+**Option 1: Fix in Windows (Recommended if dual-booting)**
+1. Boot into Windows
+2. Disable Fast Startup:
+   - Control Panel → Power Options → Choose what power buttons do
+   - Click "Change settings that are currently unavailable"
+   - Uncheck "Turn on fast startup (recommended)"
+   - Save changes
+3. Shut down Windows properly (not Restart, use Shut Down)
+4. Boot into Linux and remount
+
+**Option 2: Use ntfsfix on Linux**
+
+```bash
+# First, unmount the drive if mounted
+sudo umount /dev/sdX1
+
+# Run ntfsfix to repair filesystem errors
+sudo ntfsfix /dev/sdX1
+
+# Example: For a drive at /dev/sdc2
+sudo ntfsfix /dev/sdc2
+
+# Remount the drive
+sudo mount /dev/sdX1 /mnt/backup
+```
+
+**What ntfsfix does:**
+- Clears the "dirty" flag that prevents mounting read-write
+- Fixes common NTFS inconsistencies
+- Resets the NTFS journal
+- Does NOT run a full filesystem check (use Windows chkdsk for that)
+
+**Option 3: Force read-write mount (Use with caution)**
+
+```bash
+# Mount with remove_hiberfile option
+sudo mount -t ntfs-3g -o remove_hiberfile /dev/sdX1 /mnt/backup
+```
+
+**Warning:** Only use `remove_hiberfile` if you're certain Windows is not hibernated. Data loss can occur if Windows resumes from hibernation after this.
+
+##### Filesystem Errors and Corruption
+
+**Symptoms:**
+- `ntfsfix` reports errors
+- Mount fails with "corrupt filesystem" message
+- Files or directories inaccessible
+
+**Diagnostic Commands:**
+
+```bash
+# Check NTFS filesystem status
+sudo ntfsinfo -m /dev/sdX1
+
+# Identify the device (find your drive)
+lsblk
+# or
+sudo fdisk -l
+```
+
+**Solutions:**
+
+**For Minor Issues:**
+```bash
+# Unmount first
+sudo umount /dev/sdX1
+
+# Run ntfsfix
+sudo ntfsfix /dev/sdX1
+
+# If ntfsfix succeeds, remount
+sudo mount -t ntfs-3g /dev/sdX1 /mnt/backup
+```
+
+**For Serious Corruption:**
+```bash
+# Boot into Windows and run chkdsk
+# From Windows Command Prompt (Admin):
+chkdsk E: /F /R
+
+# /F fixes errors
+# /R locates bad sectors and recovers readable data
+```
+
+**Emergency Read-Only Access:**
+```bash
+# If repairs fail but you need to recover data
+sudo mount -t ntfs-3g -o ro /dev/sdX1 /mnt/backup
+```
+
+##### "Metadata kept in Windows cache" Error
+
+**Full Error:**
+```
+The disk contains an unclean file system (0, 0).
+Metadata kept in Windows cache, refused to mount.
+Failed to mount '/dev/sdX1': Operation not permitted
+The NTFS partition is in an unsafe state.
+```
+
+**Cause:** Windows used Fast Startup or hibernated without fully flushing filesystem metadata.
+
+**Solution:**
+
+```bash
+# Clear the dirty bit and Windows cache flag
+sudo ntfsfix -d /dev/sdX1
+
+# Then mount normally
+sudo mount /dev/sdX1 /mnt/backup
+```
+
+##### Proper NTFS Mount Options
+
+**Recommended mount command:**
+
+```bash
+# Mount with full permissions for your user
+sudo mount -t ntfs-3g -o uid=$(id -u),gid=$(id -g),umask=0022 /dev/sdX1 /mnt/backup
+```
+
+**Mount Options Explained:**
+- `uid=$(id -u)`: Set owner to current user
+- `gid=$(id -g)`: Set group to current user's group
+- `umask=0022`: Files readable by all, writable by owner (755 for dirs, 644 for files)
+
+**Alternative for full access:**
+```bash
+# Mount with full read/write for everyone (less secure)
+sudo mount -t ntfs-3g -o permissions /dev/sdX1 /mnt/backup
+```
+
+##### Automatic Mounting (fstab)
+
+**To mount NTFS drive automatically at boot:**
+
+1. Find the UUID of your drive:
+```bash
+sudo blkid /dev/sdX1
+```
+
+2. Edit `/etc/fstab`:
+```bash
+sudo nano /etc/fstab
+```
+
+3. Add entry (replace UUID and mount point):
+```
+UUID=YOUR-UUID-HERE  /mnt/backup  ntfs-3g  uid=1000,gid=1000,umask=0022,nofail  0  0
+```
+
+**fstab options explained:**
+- `nofail`: System boots even if drive not connected
+- `uid=1000,gid=1000`: Replace with your user ID from `id -u` and `id -g`
+- `0 0`: Don't fsck NTFS on boot
+
+##### Dual-Boot Considerations
+
+**If you're dual-booting Windows and Linux:**
+
+1. **Always disable Fast Startup in Windows**
+   - Prevents "dirty" filesystem issues
+   - Allows safe read/write from Linux
+
+2. **Shut down Windows properly**
+   - Use Shut Down, not Restart
+   - Restart often uses Fast Startup even when disabled
+
+3. **Never mount Windows system drive from Linux while Windows is hibernated**
+   - Data corruption risk
+   - Use `ntfsfix -n` (no changes mode) to check status first
+
+4. **For shared data drives:**
+   - Mount with proper permissions
+   - Use consistent uid/gid settings
+   - Consider exFAT instead of NTFS for better cross-platform support
+
+##### Quick Reference
+
+**Common Commands:**
+```bash
+# Install NTFS tools
+sudo apt install ntfs-3g ntfsprogs
+
+# Fix read-only issues
+sudo ntfsfix /dev/sdX1
+
+# Fix Windows cache issues
+sudo ntfsfix -d /dev/sdX1
+
+# Mount with user permissions
+sudo mount -t ntfs-3g -o uid=$(id -u),gid=$(id -g) /dev/sdX1 /mnt/backup
+
+# Check for errors (read-only check)
+sudo ntfsfix -n /dev/sdX1
+
+# Identify drives
+lsblk
+sudo blkid
+```
+
+**When to use Windows chkdsk instead:**
+- Serious filesystem corruption
+- Bad sectors detected
+- NTFS journal corruption
+- ntfsfix fails repeatedly
+- Data recovery needed
 
 #### Workspace directory errors
 
