@@ -1,6 +1,6 @@
 # x0dus
 
-**Version:** 1.0.0
+**Version:** 1.0.0.RC1
 
 Windows and Linux helper scripts to migrate to Linux.
 
@@ -112,12 +112,11 @@ command.
 
 ### 3. Clone or update the repository in your home directory
 
-After Git is installed, download the helpers to `~/x0dus` (replace
-`your-account` with the actual repository owner if it differs):
+After Git is installed, download the helpers to `~/x0dus`:
 
 ```bash
 cd ~
-git clone https://github.com/your-account/x0dus.git
+git clone https://github.com/Hexaxia-Technologies/x0dus.git
 cd ~/x0dus
 ```
 
@@ -292,6 +291,56 @@ directories can be added with `-AdditionalPaths`.
 The data is copied with Robocopy using options that preserve file attributes
 and timestamps while skipping junction loops. A timestamped Robocopy log file is
 stored in `logs\` inside the destination folder (unless logging is disabled).
+
+### Error Handling and Failed Files Logging
+
+The backup script includes comprehensive error handling that gracefully manages individual file failures:
+
+**Robocopy Exit Code Handling:**
+- **Exit codes 0-3**: Success - All files copied or no changes needed
+- **Exit codes 4-7**: Warnings - Some files failed, but backup **continues** with remaining items
+- **Exit codes 8+**: Critical errors - Script logs the issue and **continues** with next backup item
+
+**Key behavior:** The script no longer quits when robocopy encounters errors. Instead, it:
+1. Logs failed files to `logs/failed-files-<timestamp>.log` for each source
+2. Continues backing up remaining items
+3. Shows a comprehensive summary at the end
+
+**Failed Files Log:**
+
+When files cannot be copied (typically due to being locked by running applications, permission issues, or system file restrictions), the script creates a detailed failed files log with:
+- Session timestamp
+- Source path for each group of failures
+- Individual file paths that failed to copy
+- Count of failed files per source
+
+Example log format:
+```
+================================================
+Failed Files Log - Backup Session 2025-01-15 14:23:45
+================================================
+
+------------------------------------------------
+Source: C:\Users\YourName\AppData
+Timestamp: 2025-01-15 14:25:12
+Failed file count: 3
+------------------------------------------------
+C:\Users\YourName\AppData\Local\Google\Chrome\User Data\lockfile
+C:\Users\YourName\AppData\Local\Microsoft\Outlook\outlook.pst
+C:\Users\YourName\AppData\Roaming\App\config.db
+```
+
+**Backup Completion Summary:**
+
+At the end of the backup, the script displays a summary showing:
+- Whether any files failed to copy
+- Location of the failed files log (if failures occurred)
+- Common reasons for failures (files in use, permissions, locked files, network errors)
+- Suggested remediation steps (close applications, run as Administrator, manually copy critical files)
+
+This approach ensures that common issues like locked database files or browser caches in use don't prevent the backup of your important documents, pictures, and other data.
+
+### Inventory Files
 
 When the backup completes, the script exports two inventory files:
 - `installed-software.csv` – containing the Display Name, Version, Publisher,
@@ -488,6 +537,253 @@ based on your migration context.
 4. All prompts are saved to `~/x0dus/ai-prompts/` with an index file explaining
    each prompt. Simply copy the prompt text and paste it into ChatGPT, Claude,
    Gemini, or any other AI chatbot for personalized assistance.
+
+## Troubleshooting
+
+### Windows Backup Issues
+
+#### "Access Denied" errors when scanning folders
+
+**Symptoms:** PowerShell reports access denied when scanning certain folders during size estimation.
+
+**Solutions:**
+- Run PowerShell as Administrator (right-click PowerShell, select "Run as administrator")
+- The script will warn you about inaccessible folders and continue with the backup
+- Ensure extra free space at the destination since some folders couldn't be measured
+
+#### Insufficient space error
+
+**Symptoms:** The script reports "INSUFFICIENT SPACE" during pre-flight checks.
+
+**Cause:** The estimated backup size exceeds available space at the destination.
+
+**Solutions:**
+- Free up space at the destination drive
+- Choose a different destination with more free space
+- Reduce backup scope using `-AppDataMode RoamingOnly` or `-AppDataMode EssentialFoldersOnly`
+- Skip non-essential folders with `-AppDataMode None` if you only need user files
+
+#### Space utilization warnings (80%+)
+
+**Symptoms:** Yellow or red warnings about space utilization percentage.
+
+**Explanation:** Even if the backup fits mathematically, Robocopy may need temporary space during copying.
+
+**Action:** The script will prompt you to confirm whether to proceed. Review the space summary and decide whether to continue or free up more space.
+
+#### Network share won't mount
+
+**Symptoms:** Error when trying to connect to `-NetworkShare` parameter.
+
+**Solutions for SMB shares:**
+- Verify credentials are correct: `$credential = Get-Credential` (enter username and password)
+- Test connection manually: `Test-Path "\\server\share"`
+- Ensure SMB is enabled on the target server
+- Check Windows Firewall isn't blocking SMB traffic
+
+**Solutions for NFS shares:**
+- Verify NFS client is installed: `Get-WindowsFeature NFS-Client` (Server) or check "Services for NFS" (Windows 10/11 Pro)
+- Check server exports: From Linux server run `showmount -e server-ip`
+- Verify network connectivity: `ping server-ip`
+- Ensure correct NFS path format: `server:/export/path`
+
+#### Robocopy fails or shows errors
+
+**Symptoms:** Robocopy exits with errors, backup doesn't complete.
+
+**Understanding Robocopy exit codes:**
+- **0** - No files copied, no errors (destination already up to date)
+- **1** - Files copied successfully
+- **2** - Extra files or directories detected (normal)
+- **3** - Files copied with some skipped (normal)
+- **4-7** - Some files failed (script continues and logs failures)
+- **8 or higher** - Critical errors occurred (script will retry automatically)
+
+**Solutions:**
+- Check the Robocopy log file at `destination\logs\backup-TIMESTAMP.log` for specific errors
+- Check the failed files log at `destination\logs\failed-files-TIMESTAMP.log` to see which files couldn't be copied
+- If retries fail, increase retry attempts: `-RobocopyRetries 5`
+- For flaky network connections, reduce threads: `-RobocopyThreads 1`
+- For permission errors, run PowerShell as Administrator
+
+#### Some files failed to copy (exit codes 4-7)
+
+**Symptoms:** Backup completes but shows warning about failed files.
+
+**Explanation:** This is normal behavior when some files are locked, in use, or inaccessible. The script logs these failures and continues backing up other files.
+
+**Common causes:**
+- **Files in use**: Browser databases, Outlook PST files, application lock files
+- **Permission issues**: System files or files owned by other users
+- **Locked files**: Database files currently being written to
+- **Network issues**: Temporary connectivity problems (for network destinations)
+
+**Solutions:**
+1. **Review the failed files log**: Check `destination\logs\failed-files-TIMESTAMP.log` to see what failed
+2. **Close applications**: Close browsers, Outlook, and other applications that may be locking files
+3. **Run as Administrator**: Rerun PowerShell as Administrator for better file access
+4. **Manually copy critical files**: If specific important files failed, close the application using them and manually copy
+5. **Most files are not critical**: Many failed files are temporary files, caches, or lock files that don't need to be backed up
+
+**When to be concerned:**
+- If important documents or pictures failed to copy
+- If large numbers of files failed (hundreds or thousands)
+- If the failed files log shows errors for entire directories
+
+**When NOT to worry:**
+- Browser cache files, lock files, or temporary files
+- AppData files from applications you won't use on Linux
+- Small numbers of failures (a few dozen files in AppData is normal)
+
+#### Backup runs very slowly
+
+**Symptoms:** Backup takes hours or appears stuck.
+
+**Solutions:**
+- For network backups: Reduce thread count `-RobocopyThreads 1` (multi-threading can saturate network)
+- For local backups: Increase threads `-RobocopyThreads 16` (faster on modern systems)
+- Check destination drive speed (USB 2.0 is slow, USB 3.0+ or internal drives are faster)
+- Use `RoamingOnly` or `EssentialFoldersOnly` AppData mode to reduce backup size
+
+#### Hardware/software inventory files not created
+
+**Symptoms:** Missing `hardware-inventory.csv` or `installed-software.csv` in backup destination.
+
+**Cause:** Inventories are only created after successful backup completion, skipped during `-DryRun`.
+
+**Solutions:**
+- Ensure backup completed successfully (exit code 0-3)
+- Check `logs\` subdirectory in backup destination
+- Re-run backup without `-DryRun` flag
+- Run PowerShell as Administrator if WMI/registry access is denied
+
+### Linux Restore Issues
+
+#### Python 3 not found (software inventory helper)
+
+**Symptoms:** `linux-software-inventory.sh` reports Python 3 is not installed.
+
+**Solutions:**
+- **Debian/Ubuntu:** `sudo apt update && sudo apt install -y python3`
+- **Fedora/RHEL:** `sudo dnf install -y python3`
+- **Arch Linux:** `sudo pacman -S python`
+- **openSUSE:** `sudo zypper install -y python3`
+- **Alternative:** Open the CSV file manually with LibreOffice Calc or a text editor
+
+#### Mount point already in use
+
+**Symptoms:** Error when trying to mount backup drive to `/mnt/backup`.
+
+**Cause:** A filesystem is already mounted at that location.
+
+**Solutions:**
+- Check existing mounts: `findmnt /mnt/backup` or `mount | grep backup`
+- Reuse the existing mount when the helper prompts you
+- Choose a different mount point
+- Unmount first: `sudo umount /mnt/backup` (ensure no files are in use)
+
+#### Permission denied when accessing backup files
+
+**Symptoms:** Cannot read files from mounted backup drive.
+
+**Solutions:**
+- Mount the drive with sudo: The Linux helpers will prompt for sudo when needed
+- Check mount permissions: `ls -la /mnt/backup`
+- For NTFS drives, install NTFS support:
+  - **Debian/Ubuntu:** `sudo apt install ntfs-3g`
+  - **Fedora:** `sudo dnf install ntfs-3g`
+- For network shares, verify credentials and permissions on the source
+
+#### Workspace directory errors
+
+**Symptoms:** Helpers report they cannot create or write to `~/x0dus/`.
+
+**Cause:** Permission issues or disk full.
+
+**Solutions:**
+- Check home directory permissions: `ls -ld ~`
+- Verify disk space: `df -h ~`
+- Manually create directory: `mkdir -p ~/x0dus`
+- Check if directory is owned by you: `ls -la ~/x0dus`
+
+#### Helpers don't remember previous values
+
+**Symptoms:** Each helper asks for mount point or profile path again.
+
+**Cause:** Workspace files in `~/x0dus/` are missing or empty.
+
+**Solutions:**
+- Check workspace exists: `ls ~/x0dus/`
+- Verify workspace files: `cat ~/x0dus/mount-point.txt`
+- Re-run helpers in order to rebuild workspace state
+- Ensure helpers have write permissions: `ls -la ~/x0dus/`
+
+#### Desktop files not restored correctly
+
+**Symptoms:** Old Windows desktop files not appearing in `~/oldDesktop`.
+
+**Cause:** The helper filters out `.lnk` shortcut files (which don't work on Linux).
+
+**Expected behavior:**
+- Windows `.lnk` shortcuts are intentionally skipped
+- Other files (documents, images, etc.) are copied to `~/oldDesktop`
+- Check `~/x0dus/old-desktop-items.txt` for a list of what was copied
+
+#### Hardware drivers not detected
+
+**Symptoms:** `linux-hardware-helper.sh` doesn't show any hardware or drivers.
+
+**Cause:** Missing `hardware-inventory.csv` from Windows backup.
+
+**Solutions:**
+- Verify the file exists: `find /mnt/backup -name "hardware-inventory.csv"`
+- Ensure Windows backup completed successfully and created inventories
+- Re-run `backup.ps1` on Windows without `-DryRun` flag
+- Manually specify the path when the helper prompts you
+
+#### AI prompts seem generic or incomplete
+
+**Symptoms:** Generated prompts don't include specific hardware or software details.
+
+**Cause:** Hardware/software inventory files not found or not accessible.
+
+**Solutions:**
+- Ensure `linux-restore-helper.sh` was run first to mount the backup
+- Verify inventory files exist: `ls /mnt/backup/logs/*.csv`
+- Check workspace has inventory paths: `cat ~/x0dus/installed-software-inventory-path.txt`
+- Re-run `linux-software-inventory.sh` and `linux-hardware-helper.sh` first
+
+### General Issues
+
+#### Git clone fails
+
+**Symptoms:** `git clone https://github.com/Hexaxia-Technologies/x0dus.git` fails.
+
+**Solutions:**
+- Check internet connection
+- Verify Git is installed: `git --version`
+- Try HTTPS instead of SSH: Use the HTTPS URL from the README
+- Check GitHub status: Visit https://www.githubstatus.com/
+
+#### Scripts show "Permission denied"
+
+**Symptoms:** Cannot execute bash scripts even after `chmod +x`.
+
+**Solutions:**
+- Verify execute permission: `ls -l linux-*.sh` (should show `-rwxr-xr-x`)
+- Re-apply permissions: `chmod +x linux-*.sh`
+- Run with bash explicitly: `bash linux-restore-helper.sh`
+- Check if drive is mounted with `noexec` flag: `mount | grep $(df . | tail -1 | awk '{print $1}')`
+
+#### Need to start over or redo a step
+
+**Symptoms:** Made a mistake and want to re-run helpers.
+
+**Solutions:**
+- Helpers can be re-run multiple times safely
+- To reset workspace state: `rm -rf ~/x0dus/` and start fresh
+- To redo data restore: Delete copied files from home directory first
+- Workspace files are just text files - you can edit them manually if needed: `nano ~/x0dus/mount-point.txt`
 
 ### Recommended workflow
 

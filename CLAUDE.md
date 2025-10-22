@@ -4,15 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Version and Status
 
-**Current Version:** 1.0.0
+**Current Version:** 1.0.0.RC1
 
-**Status:** Production-ready
+**Status:** Release Candidate 1
 
-The x0dus migration toolkit is feature-complete for v1.0 and ready for real-world use. The core backup functionality is robust, user-friendly, and addresses the primary use case of backing up Windows user data before Linux migration.
+The x0dus migration toolkit is in release candidate status. The core backup functionality is robust and includes comprehensive error handling for file copy failures. This RC includes failed files logging and improved robocopy error handling.
 
 ## Project Overview
 
-x0dus is a Windows-to-Linux migration toolkit consisting of six companion scripts (all v1.0.0):
+x0dus is a Windows-to-Linux migration toolkit consisting of six companion scripts (all v1.0.0.RC1):
 - `backup.ps1` (PowerShell) - Backs up Windows user profiles before OS replacement
 - `linux-restore-helper.sh` (Bash) - Helps locate and mount the backup drive on Linux
 - `linux-data-restore.sh` (Bash) - Restores Windows profile data to Linux home directory
@@ -226,13 +226,80 @@ Before starting the backup, the script performs comprehensive validation:
   - Allows user to cancel (Ctrl+C) or screenshot the summary
 - Backup only starts after user presses Enter
 
-### Robocopy Retry Logic
+### Robocopy Error Handling and Failed Files Logging
 
-`Invoke-RobocopyBackup` now implements exponential backoff retry logic:
+`Invoke-RobocopyBackup` implements sophisticated error handling with failed file tracking:
+
+**Exit Code Handling:**
+- **0-3**: Success (no errors or minor skipped files)
+- **4-7**: Warnings - Some files failed but backup CONTINUES
+  - Logs warning message
+  - Parses and logs failed files to dedicated log
+  - Returns normally (does NOT throw error)
+- **8+**: Critical errors
+  - Logs failed files
+  - Shows warning but CONTINUES with next backup item (does NOT quit script)
+  - Displays troubleshooting guidance
+
+**Key change from previous behavior:** The script no longer quits on robocopy errors. Instead, it:
+1. Logs which files failed for each source path
+2. Continues backing up remaining items
+3. Shows comprehensive summary at the end with failed files report
+
+**Failed Files Logging:**
+
+New functions added for tracking failed file copies:
+
+1. **`Get-FailedFilesLogPath`** - Creates timestamped log path at `logs/failed-files-<timestamp>.log`
+2. **`Parse-FailedFiles`** - Parses robocopy logs to extract failed file paths
+   - Searches for ERROR patterns in robocopy log
+   - Extracts file paths from error messages
+   - Groups failures by source path
+   - Writes formatted sections to failed files log
+
+**Failed Files Log Format:**
+```
+================================================
+Failed Files Log - Backup Session 2025-01-15 14:23:45
+================================================
+
+------------------------------------------------
+Source: C:\Users\YourName\AppData
+Timestamp: 2025-01-15 14:25:12
+Failed file count: 3
+------------------------------------------------
+C:\Users\YourName\AppData\Local\Google\Chrome\User Data\lockfile
+C:\Users\YourName\AppData\Local\Microsoft\Outlook\outlook.pst
+C:\Users\YourName\AppData\Roaming\App\config.db
+
+------------------------------------------------
+Source: C:\Users\YourName\Documents
+Timestamp: 2025-01-15 14:30:45
+Failed file count: 1
+------------------------------------------------
+C:\Users\YourName\Documents\locked-file.docx
+```
+
+**Backup Completion Summary:**
+
+After all backup items complete, the script shows a comprehensive summary:
+- Checks if failed files log exists and has content
+- If failures occurred:
+  - Shows clear WARNING message
+  - Displays failed files log location
+  - Lists common reasons (files in use, permissions, locked files, network errors)
+  - Suggests remediation steps (close apps, run as Administrator, manually copy critical files)
+- If no failures: Shows success message
+
+**Retry Logic:**
 1. Initial Robocopy attempt
 2. If exit code > 3 (failure), wait `2^(attempt-1) * RetryDelaySeconds` and retry
 3. Continue until `RobocopyRetries + 1` total attempts exhausted
-4. On final failure, parse last 200 lines of log for ERROR/failed patterns and display troubleshooting guidance
+4. Parse failed files from log after each attempt
+5. On final failure, parse last 200 lines of log for ERROR/failed patterns and display troubleshooting guidance
+
+**Use Case:**
+This addresses the common issue where robocopy errors in AppData (locked database files, browser caches in use, etc.) would cause the entire script to quit before backing up other important data. Now the script gracefully handles individual file failures and provides a detailed report at the end.
 
 ### Shared State Management (Linux helpers)
 
@@ -283,7 +350,9 @@ Supported families: Debian/Ubuntu, Fedora/RHEL, Arch, openSUSE, Gentoo, Alpine, 
 - `Test-IsDestinationWithinSource` - Prevents recursive backup loops
 
 **Backup execution**:
-- `Invoke-RobocopyBackup` - Wraps Robocopy with proper flags
+- `Invoke-RobocopyBackup` - Wraps Robocopy with proper flags and error handling
+- `Get-FailedFilesLogPath` - Creates timestamped path for failed files log
+- `Parse-FailedFiles` - Parses robocopy logs to extract failed file paths
 - `Export-InstalledSoftwareInventory` - Queries registry for installed software → `installed-software.csv`
 - `Export-HardwareInventory` - Collects hardware information via WMI/CIM → `hardware-inventory.csv`
 
@@ -299,11 +368,11 @@ Supported families: Debian/Ubuntu, Fedora/RHEL, Arch, openSUSE, Gentoo, Alpine, 
 
 ### Bash Script Architecture
 
-All bash scripts follow consistent patterns (v1.0.0):
+All bash scripts follow consistent patterns (v1.0.0.RC1):
 
 **Version Management:**
 ```bash
-SCRIPT_VERSION="1.0.0"
+SCRIPT_VERSION="1.0.0.RC1"
 ```
 - Every script has version variable
 - `--version` flag: `printf 'script-name.sh version %s\n' "$SCRIPT_VERSION"`
@@ -349,7 +418,7 @@ The data restore script has special logic to keep the new Linux desktop clean:
 4. Symlinks to `installed-software-names-latest.txt` for quick access
 5. Calls `print_package_manager_guidance()` which provides distro-specific package manager commands
 
-### Hardware Compatibility Helper (NEW in v1.0.0)
+### Hardware Compatibility Helper (NEW in v1.0.0.RC1)
 
 `linux-hardware-helper.sh` analyzes Windows hardware inventory for Linux driver compatibility:
 
@@ -401,7 +470,7 @@ The data restore script has special logic to keep the new Linux desktop clean:
 **Use Case:**
 Run immediately after installing Linux to identify hardware that needs drivers before issues occur (e.g., no WiFi, no graphics acceleration).
 
-### AI Prompt Generator (NEW in v1.0.0)
+### AI Prompt Generator (NEW in v1.0.0.RC1)
 
 `linux-ai-prompt-generator.sh` generates contextual AI chatbot prompts for migration assistance:
 
@@ -724,6 +793,14 @@ If implementing future enhancements, recommended priority order:
 6. Lower priority: Modularization, scheduling, notifications, etc.
 
 ## Version History
+
+- **v1.0.0.RC1** (2025-01-22) - Release Candidate 1
+  - Added comprehensive robocopy error handling
+  - Failed files logging feature
+  - Script continues on file copy errors instead of quitting
+  - Backup completion summary with failed files report
+  - Exit codes 4-7 handled as warnings (backup continues)
+  - Exit codes 8+ continue with next item instead of terminating
 
 - **v1.0.0** (2025-10-20) - Initial production release
 

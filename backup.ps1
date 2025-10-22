@@ -191,7 +191,7 @@ param(
 )
 
 # Script version
-$scriptVersion = "1.0.0"
+$scriptVersion = "1.0.0.RC1"
 
 # Display banner
 $banner = @"
@@ -1597,6 +1597,104 @@ function Get-LogFilePath {
     return Join-Path $logDirectory "backup-$timestamp.log"
 }
 
+function Get-FailedFilesLogPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Destination
+    )
+
+    if ($NoLog.IsPresent) {
+        return $null
+    }
+
+    $logDirectory = Join-Path $Destination 'logs'
+    if (-not (Test-Path -LiteralPath $logDirectory)) {
+        New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
+    }
+
+    $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+    return Join-Path $logDirectory "failed-files-$timestamp.log"
+}
+
+function Parse-FailedFiles {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RobocopyLogPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$FailedFilesLogPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$SourcePath
+    )
+
+    try {
+        if (-not (Test-Path -LiteralPath $RobocopyLogPath)) {
+            Write-Verbose "Robocopy log not found at $RobocopyLogPath, skipping failed file parsing"
+            return
+        }
+
+        $logContent = Get-Content -Path $RobocopyLogPath -ErrorAction Stop
+        $failedFiles = @()
+
+        # Robocopy log patterns for failed files:
+        # - Lines with ERROR followed by file path
+        # - Lines starting with file path followed by error code/reason
+        # Common patterns: "ERROR 5 (0x00000005)", "ERROR 32 (0x00000020)", etc.
+        foreach ($line in $logContent) {
+            # Match lines with ERROR and extract file paths
+            if ($line -match 'ERROR\s+\d+\s+\(0x[0-9A-Fa-f]+\)\s+(.+)') {
+                $filePath = $matches[1].Trim()
+                if (-not [string]::IsNullOrWhiteSpace($filePath)) {
+                    $failedFiles += $filePath
+                }
+            }
+            # Also match lines that start with timestamp and contain errors
+            elseif ($line -match '^\s+\d+\s+(.+\.(txt|log|dat|ini|cfg|xml|json|db|sys|dll|exe|tmp|bak|old|cache|lock|journal|etl|evtx).*)$' -and $line -match '(ERROR|Access is denied|The process cannot access|sharing violation)') {
+                $filePath = $matches[1].Trim()
+                if (-not [string]::IsNullOrWhiteSpace($filePath)) {
+                    $failedFiles += $filePath
+                }
+            }
+        }
+
+        if ($failedFiles.Count -gt 0) {
+            # Write header for this source if file doesn't exist yet
+            $needsHeader = -not (Test-Path -LiteralPath $FailedFilesLogPath)
+
+            if ($needsHeader) {
+                Add-Content -Path $FailedFilesLogPath -Value "================================================"
+                Add-Content -Path $FailedFilesLogPath -Value "Failed Files Log - Backup Session $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+                Add-Content -Path $FailedFilesLogPath -Value "================================================"
+                Add-Content -Path $FailedFilesLogPath -Value ""
+            }
+
+            # Write section header for this source
+            Add-Content -Path $FailedFilesLogPath -Value "------------------------------------------------"
+            Add-Content -Path $FailedFilesLogPath -Value "Source: $SourcePath"
+            Add-Content -Path $FailedFilesLogPath -Value "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+            Add-Content -Path $FailedFilesLogPath -Value "Failed file count: $($failedFiles.Count)"
+            Add-Content -Path $FailedFilesLogPath -Value "------------------------------------------------"
+
+            # Write failed files
+            foreach ($file in $failedFiles) {
+                Add-Content -Path $FailedFilesLogPath -Value $file
+            }
+
+            Add-Content -Path $FailedFilesLogPath -Value ""
+
+            Write-Warning "Found $($failedFiles.Count) file(s) that could not be copied from $SourcePath"
+            Write-Host "Failed files logged to: $FailedFilesLogPath" -ForegroundColor Yellow
+        }
+        else {
+            Write-Verbose "No failed files detected in Robocopy log for $SourcePath"
+        }
+    }
+    catch {
+        Write-Warning "Unable to parse failed files from Robocopy log: $($_.Exception.Message)"
+    }
+}
+
 function Show-RobocopyProgress {
     param(
         [Parameter(Mandatory = $true)]
@@ -1633,6 +1731,8 @@ function Invoke-RobocopyBackup {
         $Item,
 
         [string]$LogFile,
+
+        [string]$FailedFilesLog,
 
         [switch]$IsDryRun,
         [ValidateRange(1,128)]
@@ -1714,6 +1814,24 @@ function Invoke-RobocopyBackup {
 
         if ($exitCode -le 3) {
             Write-Host "Completed with exit code $exitCode" -ForegroundColor Green
+
+            # Parse failed files from log if available
+            if ($LogFile -and $FailedFilesLog -and (Test-Path -LiteralPath $LogFile)) {
+                Parse-FailedFiles -RobocopyLogPath $LogFile -FailedFilesLogPath $FailedFilesLog -SourcePath $Item.Source
+            }
+            return
+        }
+
+        # Exit codes 4-7 indicate some files failed but operation can continue
+        if ($exitCode -ge 4 -and $exitCode -le 7) {
+            Write-Warning "Robocopy completed with warnings (exit code $exitCode). Some files may have failed to copy."
+
+            # Parse failed files from log
+            if ($LogFile -and $FailedFilesLog -and (Test-Path -LiteralPath $LogFile)) {
+                Parse-FailedFiles -RobocopyLogPath $LogFile -FailedFilesLogPath $FailedFilesLog -SourcePath $Item.Source
+            }
+
+            Write-Host "Continuing with next backup item..." -ForegroundColor Yellow
             return
         }
 
@@ -1727,7 +1845,7 @@ function Invoke-RobocopyBackup {
     }
     while ($attempt -le $Retries)
 
-    # If we reach here all attempts failed
+    # If we reach here all attempts failed with serious errors (exit code >= 8)
     Write-Host "Robocopy failed for $($Item.Source) after $attempt attempt(s) with exit code $exitCode." -ForegroundColor Red
 
     if ($LogFile) {
@@ -1746,13 +1864,17 @@ function Invoke-RobocopyBackup {
         catch {
             Write-Warning "Unable to read Robocopy log at ${LogFile}: $($_.Exception.Message)"
         }
+
+        # Parse failed files even on critical failure
+        if ($FailedFilesLog) {
+            Parse-FailedFiles -RobocopyLogPath $LogFile -FailedFilesLogPath $FailedFilesLog -SourcePath $Item.Source
+        }
     }
 
     Write-Host "Common causes: insufficient permissions, files in use, network/share errors, or serious I/O errors." -ForegroundColor Yellow
     Write-Host "Try: re-running PowerShell as Administrator, disabling interfering antivirus, or running Robocopy manually using the shown log path to inspect details." -ForegroundColor Yellow
     Write-Host "Consider reducing threads (use -RobocopyThreads 1) or increasing retries." -ForegroundColor Yellow
-
-    throw "Robocopy failed for $($Item.Source) with exit code $exitCode after $attempt attempt(s). See log: $LogFile"
+    Write-Warning "Continuing with remaining backup items, but this item may be incomplete."
 }
 
 $osInfo = Get-OsVersionInfo
@@ -1900,6 +2022,11 @@ try {
         Write-Warning 'Logging disabled because the log path could not be created.'
     }
 
+    $failedFilesLog = Get-FailedFilesLogPath -Destination $destination
+    if ($failedFilesLog) {
+        Write-Verbose "Failed files will be logged to $failedFilesLog"
+    }
+
     $includeCurrentUser = -not $SkipDefaultDirectories.IsPresent
     $backupItems = Resolve-BackupItems -Destination $destination -IncludeCurrentUser:$includeCurrentUser -IncludeAllUsers:$IncludeAllUsers.IsPresent -IncludePublicProfile:$IncludePublicProfile.IsPresent -ExtraPaths $AdditionalPaths -AppDataMode $AppDataMode
 
@@ -2036,17 +2163,58 @@ try {
     $itemIndex = 0
     foreach ($item in $backupItems) {
         $itemIndex++
-        Invoke-RobocopyBackup -Item $item -LogFile $logFile -IsDryRun:$DryRun -Threads $RobocopyThreads -Retries $RobocopyRetries -RetryDelaySeconds $RobocopyRetryDelaySeconds -CurrentItem $itemIndex -TotalItems $backupItems.Count -AppDataMode $AppDataMode
+        Invoke-RobocopyBackup -Item $item -LogFile $logFile -FailedFilesLog $failedFilesLog -IsDryRun:$DryRun -Threads $RobocopyThreads -Retries $RobocopyRetries -RetryDelaySeconds $RobocopyRetryDelaySeconds -CurrentItem $itemIndex -TotalItems $backupItems.Count -AppDataMode $AppDataMode
     }
 
-    Write-Host 'Backup completed successfully.' -ForegroundColor Green
-    if ($DryRun) {
-        Write-Host 'Dry run mode was enabled. No files were copied.' -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "+===============================================================================+" -ForegroundColor Cyan
+    Write-Host "|                         BACKUP COMPLETION SUMMARY                             |" -ForegroundColor Cyan
+    Write-Host "+===============================================================================+" -ForegroundColor Cyan
+    Write-Host ""
+
+    # Check if failed files log exists and has content
+    if ($failedFilesLog -and (Test-Path -LiteralPath $failedFilesLog)) {
+        $failedFilesContent = Get-Content -Path $failedFilesLog -ErrorAction SilentlyContinue
+        if ($failedFilesContent -and $failedFilesContent.Count -gt 0) {
+            Write-Host "WARNING: Some files could not be backed up!" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "A log of failed files has been created at:" -ForegroundColor White
+            Write-Host "  $failedFilesLog" -ForegroundColor Cyan
+            Write-Host ""
+            Write-Host "Common reasons for backup failures:" -ForegroundColor White
+            Write-Host "  - Files in use by running applications" -ForegroundColor Gray
+            Write-Host "  - Insufficient permissions (try running as Administrator)" -ForegroundColor Gray
+            Write-Host "  - System files locked by Windows" -ForegroundColor Gray
+            Write-Host "  - Network errors (for network destinations)" -ForegroundColor Gray
+            Write-Host ""
+            Write-Host "Review the failed files log to determine if any critical files were missed." -ForegroundColor Yellow
+            Write-Host "You may want to:" -ForegroundColor White
+            Write-Host "  1. Close applications that might be using the files" -ForegroundColor Gray
+            Write-Host "  2. Re-run the backup with Administrator privileges" -ForegroundColor Gray
+            Write-Host "  3. Manually copy critical files from the failed files list" -ForegroundColor Gray
+            Write-Host ""
+        }
+        else {
+            Write-Host "Status: All files backed up successfully!" -ForegroundColor Green
+        }
     }
     else {
+        Write-Host "Status: Backup completed!" -ForegroundColor Green
+    }
+
+    if ($DryRun) {
+        Write-Host ""
+        Write-Host 'NOTE: Dry run mode was enabled. No files were actually copied.' -ForegroundColor Yellow
+    }
+    else {
+        Write-Host ""
         Export-InstalledSoftwareInventory -DestinationDirectory $destination
         Export-HardwareInventory -DestinationDirectory $destination
     }
+
+    Write-Host ""
+    Write-Host "+===============================================================================+" -ForegroundColor Cyan
+    Write-Host ""
 }
 finally {
     Disconnect-NetworkDestination -Context $networkContext
