@@ -1,12 +1,16 @@
-# Browser Migration Guides
+# Migration and Setup Guides
 
 **x0dus v1.0.0.RC1** - Windows-to-Linux Migration Toolkit
 
-This directory contains comprehensive browser migration guides to help you restore browser data after migrating from Windows to Linux.
+This directory contains comprehensive guides to help you migrate from Windows to Linux, including browser data restoration and system configuration.
 
 ---
 
 ## Overview
+
+This directory contains two types of guides:
+
+### Browser Migration Guides
 
 After running the x0dus backup on Windows and installing Linux, your Windows browser data appears lost. However, with the backup created by x0dus, you can restore **everything**:
 
@@ -19,6 +23,10 @@ After running the x0dus backup on Windows and installing Linux, your Windows bro
 - Search engines and customizations
 
 These guides provide step-by-step instructions for migrating your browser profile data from your Windows backup to your Linux installation.
+
+### System Configuration Guides
+
+Additional guides for configuring your new Linux system, including keyboard remapping and other productivity enhancements to help Windows users adapt to Linux.
 
 ---
 
@@ -108,6 +116,29 @@ Migrate Google Chrome or Chromium Browser data from Windows to Linux.
 - Chromium users
 - Users migrating between Chrome and Chromium
 - IT administrators managing multiple migrations
+
+---
+
+### [Caps Lock Remap Guide](capslock-remap-guide.md)
+**12 KB | System Configuration**
+
+Remap Caps Lock to an F-key (F13-F24) for global hotkeys on Linux.
+
+**What's Covered:**
+- Why Caps Lock is wasted keyboard real estate
+- Using keyd for Wayland-compatible remapping
+- KDE's hidden F13-F20 system shortcuts
+- Finding conflict-free F-keys (F20-F24)
+- Setting up global hotkeys for Discord, OBS, etc.
+- Complete installation and configuration walkthrough
+
+**Key Advantage:** Works on Wayland (xmodmap doesn't). Provides a dedicated global hotkey key that doesn't conflict with games or applications.
+
+**Best For:**
+- KDE Plasma users on Wayland
+- Streamers/gamers needing Push-to-Talk
+- Anyone who wants a convenient global hotkey
+- Users coming from Windows F13-F24 remapping
 
 ---
 
@@ -357,11 +388,15 @@ See the main x0dus repository for license information.
 
 ## Quick Start
 
-**Choose your browser and follow the guide:**
+**Browser Migration - Choose your browser and follow the guide:**
 
 1. **Firefox users:** [firefox-migration-guide.md](firefox-migration-guide.md) - Simplest migration (copy entire profile folder)
 2. **Brave users:** [brave-migration-guide.md](brave-migration-guide.md) - Includes Rewards/Wallet guidance
 3. **Chrome/Chromium users:** [chrome-chromium-migration-guide.md](chrome-chromium-migration-guide.md) - Most comprehensive, covers both browsers
+
+**System Configuration:**
+
+4. **Caps Lock remap:** [capslock-remap-guide.md](capslock-remap-guide.md) - Remap Caps Lock to F-key for global hotkeys (KDE Wayland)
 
 **All guides follow the same general pattern:**
 - Locate Windows backup
