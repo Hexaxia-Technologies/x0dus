@@ -35,7 +35,7 @@ The repository provides comprehensive Windows-to-Linux migration tools:
   GPUs, Wi-Fi adapters, and other hardware.
 - **`linux-ai-prompt-generator.sh`** - Generates ready-to-use AI chatbot prompts
   based on your migration context, helping you get personalized assistance from
-  ChatGPT, Claude, Gemini, or other AI assistants.
+  ChatGPT, Gemini, or other AI assistants.
 
 All Linux helpers record their activity under `~/x0dus`, a workspace folder
 in the current user's home directory that keeps logs, detected system details,
@@ -593,8 +593,8 @@ based on your migration context.
    - **General migration guidance** - Comprehensive beginner-friendly guidance
 
 4. All prompts are saved to `~/x0dus/ai-prompts/` with an index file explaining
-   each prompt. Simply copy the prompt text and paste it into ChatGPT, Claude,
-   Gemini, or any other AI chatbot for personalized assistance.
+   each prompt. Simply copy the prompt text and paste it into ChatGPT, Gemini,
+   or any other AI chatbot for personalized assistance.
 
 ## Troubleshooting
 
